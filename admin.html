@@ -1,0 +1,3162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1F4E79">
+<title>Unbilled Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script>
+// Applied before first paint so a dark-mode user never sees a white flash.
+(function(){try{
+  var t=localStorage.getItem('ub_theme');
+  if(!t) t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+}catch(e){}})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+
+/* ── Theme ─────────────────────────────────────────────────────────
+   One palette, two skins. Everything below references these vars, so
+   the dark skin only has to restate the surfaces — not the layout.   */
+:root{
+  --bg:#f0f2f5; --surface:#ffffff; --surface-2:#f9fafb; --surface-3:#f6f8fa;
+  --text:#111111; --text-2:#6b7280; --text-3:#9ca3af;
+  --border:#e5e7eb; --border-2:#e6eaf0;
+  --brand:#1F4E79; --shadow:rgba(0,0,0,.08);
+  --row-hover:#f9fafb;
+}
+html[data-theme="dark"]{
+  --bg:#0b1219; --surface:#141d27; --surface-2:#1b2531; --surface-3:#1b2531;
+  --text:#e7edf3; --text-2:#9fb0c0; --text-3:#6b7d8d;
+  --border:#26333f; --border-2:#26333f;
+  --brand:#153755; --shadow:rgba(0,0,0,.5);
+  --row-hover:#1b2531;
+}
+html[data-theme="dark"] img{filter:brightness(.9);}
+
+/* Rendered content sets some colours inline, which normal rules can't override.
+   These target exactly those values, and only in dark mode. */
+html[data-theme="dark"] [style*="background:#f9fafb"],
+html[data-theme="dark"] [style*="background:#f6f8fa"],
+html[data-theme="dark"] [style*="background:#fafafa"]{background:var(--surface-2) !important;}
+html[data-theme="dark"] [style*="background:#fff"]{background:var(--surface) !important;}
+html[data-theme="dark"] [style*="color:#111"]{color:var(--text) !important;}
+html[data-theme="dark"] [style*="color:#374151"],
+html[data-theme="dark"] [style*="color:#6b7280"]{color:var(--text-2) !important;}
+html[data-theme="dark"] [style*="border:1.5px solid #e5e7eb"],
+html[data-theme="dark"] [style*="border:1px solid #e5e7eb"],
+html[data-theme="dark"] [style*="border:1px solid #e6eaf0"]{border-color:var(--border) !important;}
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea{background:var(--surface-2) !important;color:var(--text) !important;border-color:var(--border) !important;}
+html[data-theme="dark"] tbody tr:hover{background:var(--row-hover);}
+/* Row states carry their own backgrounds, so they need dark variants —
+   otherwise light text lands on a pale yellow/green fill and vanishes. */
+html[data-theme="dark"] .ticked-row td{background:#3b3410 !important;color:#fde68a !important;}
+html[data-theme="dark"] .ticked-row .copycell:hover{background:#4d4415 !important;}
+html[data-theme="dark"] .locked-row td{background:#11321f !important;color:#a7f3d0 !important;}
+html[data-theme="dark"] .locked-row .copycell:hover{background:#17422a !important;}
+
+/* The pale accent panels (remarks, hints, changeover rows, badges) are set
+   inline. Remap each tint to a dark equivalent that keeps the same meaning. */
+html[data-theme="dark"] [style*="background:#fef2f2"]{background:#3a1a1a !important;}   /* red   — remarks   */
+html[data-theme="dark"] [style*="background:#fef2f2"] *{color:#fca5a5 !important;}
+html[data-theme="dark"] [style*="background:#e0f2fe"]{background:#0e2a3a !important;color:#7dd3fc !important;}  /* blue  — notices  */
+html[data-theme="dark"] [style*="background:#fffbeb"]{background:#3a3216 !important;color:#fde68a !important;}  /* amber — warnings */
+html[data-theme="dark"] [style*="background:#f5f3ff"]{background:#241c3d !important;}   /* violet— changeover row */
+html[data-theme="dark"] [style*="background:#dcfce7"]{background:#11321f !important;color:#a7f3d0 !important;}  /* green — locked   */
+html[data-theme="dark"] [style*="background:#ede9fe"]{background:#241c3d !important;color:#c4b5fd !important;}  /* violet— badge    */
+html[data-theme="dark"] [style*="background:#fef3c7"]{background:#3b3410 !important;color:#fde68a !important;}  /* amber — pending  */
+html[data-theme="dark"] [style*="background:#fef9c3"]{background:#3b3410 !important;color:#fde68a !important;}  /* amber — today row */
+html[data-theme="dark"] [style*="background:#fef9c3"] *{color:#fde68a !important;}
+html[data-theme="dark"] [style*="background:#f6f8fa"]{background:var(--surface-2) !important;color:var(--text) !important;}
+html[data-theme="dark"] summary{color:inherit;}
+
+/* Keep the deliberately-dark panels (instrument band, viewer) as they are. */
+html[data-theme="dark"] .dsh-panel,
+html[data-theme="dark"] #pv{filter:none;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);min-height:100vh;color:var(--text);transition:background .2s,color .2s;}
+.wrap{max-width:1280px;margin:0 auto;padding:0 14px 40px;}
+.hdr{background:var(--brand);color:#fff;padding:14px 0;margin:0 -14px 18px;}
+.hdr-in{max-width:1280px;margin:0 auto;padding:0 14px;display:flex;align-items:center;gap:10px;}
+.hdr h1{font-size:17px;font-weight:700;flex:1;}
+.hdr .who{font-size:12px;opacity:.85;}
+.hdr button{background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit;}
+
+/* Login */
+/* ── Login: a live grid, lit by the cursor ───────────────────────
+   Cells flare instantly under the pointer, then bleed back to dark —
+   current moving through a network, which is what this app measures. */
+.login-wrap{
+  position:relative; min-height:100vh; display:flex;
+  align-items:center; justify-content:center;
+  background:#0a0f16; padding:24px; overflow:hidden;
+}
+.grid-bg{
+  position:absolute; inset:0; z-index:0;
+  display:grid; gap:2px;
+  grid-template-columns:repeat(auto-fill,minmax(46px,1fr));
+  grid-auto-rows:46px;
+  align-content:start;
+}
+.gcell{
+  background:#111820;
+  transition:background 1.6s ease-out, box-shadow 1.6s ease-out;
+}
+.gcell.lit{
+  background:#ffc53d;
+  box-shadow:0 0 22px 2px rgba(255,197,61,.55);
+  transition:background 0s, box-shadow 0s;   /* strike now, fade slowly */
+}
+/* a soft vignette so the card always reads against the grid */
+.login-wrap::after{
+  content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
+  background:radial-gradient(ellipse at center, rgba(10,15,22,.55) 0%, rgba(10,15,22,.88) 70%);
+}
+.login-box{position:relative; z-index:2;}
+@media (prefers-reduced-motion: reduce){ .gcell{transition:none;} }
+.login-box{
+  position:relative; z-index:2;
+  background:rgba(20,29,39,.82);
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:18px; padding:30px 26px; width:100%; max-width:360px;
+  box-shadow:0 24px 60px -20px rgba(0,0,0,.75), inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter:blur(14px) saturate(150%);
+  -webkit-backdrop-filter:blur(14px) saturate(150%);
+}
+.login-box .lfield label{color:#9fb0c0;}
+.login-box .lfield input{
+  background:rgba(255,255,255,.05); border:1.5px solid rgba(255,255,255,.10);
+  color:#e7edf3;
+}
+.login-box .lfield input:focus{border-color:#ffc53d;background:rgba(255,255,255,.08);}
+.login-box .lfield input::placeholder{color:#5f7183;}
+.login-logo h2{color:#e7edf3 !important;letter-spacing:-.01em;}
+.login-logo p{color:#7d8ea0 !important;}
+.login-logo .ico{
+  font-size:38px;
+  filter:drop-shadow(0 0 14px rgba(255,197,61,.6));
+}
+.login-logo{text-align:center;margin-bottom:20px;}
+.login-logo .ico{font-size:40px;}
+.login-logo h2{font-size:20px;font-weight:800;color:#1F4E79;margin-top:6px;}
+.login-logo p{font-size:13px;color:var(--text-2);margin-top:2px;}
+.lfield{margin-bottom:14px;}
+.lfield label{display:block;font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:5px;}
+.lfield input,.lfield select{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:15px;font-family:inherit;outline:none;color:var(--text);background:var(--surface);}
+.lfield input:focus,.lfield select:focus{border-color:#1F4E79;}
+.bigbtn{width:100%;padding:13px;background:#1F4E79;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;}
+.bigbtn:active{opacity:.85;}
+.bigbtn:disabled{opacity:.6;cursor:default;}
+.err{background:#fee2e2;color:#b91c1c;padding:9px 13px;border-radius:8px;font-size:13px;margin-top:12px;display:none;text-align:center;}
+
+/* Tabs */
+/* ── Navigation: one floating pill rail ──────────────────────────
+   A single raised bar that follows you down the page, rather than a
+   row of separate buttons. The active tab is the only lit surface. */
+.tabs{
+  position:sticky; top:10px; z-index:90;
+  display:inline-flex; gap:4px; margin:0 auto 18px;
+  padding:5px;
+  background:var(--rail); border:1px solid var(--rail-line);
+  border-radius:999px;
+  box-shadow:0 6px 22px -8px var(--rail-shadow), 0 1px 2px rgba(0,0,0,.05);
+  backdrop-filter:saturate(180%) blur(12px);
+  -webkit-backdrop-filter:saturate(180%) blur(12px);
+  max-width:100%; overflow-x:auto; scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar{display:none;}
+.tabs-wrap{display:flex;justify-content:center;}
+.tab{
+  position:relative; white-space:nowrap;
+  padding:9px 17px; border:none; border-radius:999px;
+  font-size:13.5px; font-weight:600; font-family:inherit;
+  cursor:pointer; background:transparent; color:var(--text-2);
+  transition:color .18s ease, background .18s ease, transform .18s ease;
+}
+.tab:hover{color:var(--text); background:var(--rail-hover);}
+.tab:active{transform:scale(.97);}
+.tab.active{
+  color:#fff;
+  background:linear-gradient(180deg,#2a6698,#1F4E79);
+  box-shadow:0 3px 10px -2px rgba(31,78,121,.55), inset 0 1px 0 rgba(255,255,255,.16);
+}
+:root{
+  --rail:rgba(255,255,255,.82); --rail-line:#e6eaf0;
+  --rail-shadow:rgba(15,35,60,.30); --rail-hover:#eef1f5;
+}
+html[data-theme="dark"]{
+  --rail:rgba(20,29,39,.78); --rail-line:#26333f;
+  --rail-shadow:rgba(0,0,0,.65); --rail-hover:#1f2a36;
+}
+html[data-theme="dark"] .tab.active{
+  background:linear-gradient(180deg,#2f6d9f,#1b4568);
+  box-shadow:0 3px 12px -2px rgba(47,109,159,.5), inset 0 1px 0 rgba(255,255,255,.14);
+}
+
+/* Cards & tables */
+.card{background:var(--surface);border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:16px;}
+.card h3{font-size:15px;font-weight:700;color:#1F4E79;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+table{width:100%;border-collapse:collapse;font-size:14px;}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);font-weight:700;padding:8px 10px;border-bottom:2px solid #e5e7eb;}
+td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+.role-b{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;display:inline-block;}
+.role-admin{background:#ede9fe;color:#5b21b6;}
+.role-supervisor{background:#fef3c7;color:#92400e;}
+.role-worker{background:#e0f2fe;color:#075985;}
+.copycell:hover{background:#eff6ff !important;}
+.copycell:active{background:#dbeafe !important;}
+.locked-row td{background:#dcfce7;}
+.locked-row .copycell:hover{background:#bbf7d0 !important;}
+.ckey{padding:12px 0;font-size:16px;font-weight:600;border:none;border-radius:8px;background:#f3f4f6;color:#111;cursor:pointer;font-family:inherit;}
+.ckey:active{transform:scale(.95);}
+.ckey.cop{background:#dbeafe;color:#1d4ed8;}
+.ckey.cfn{background:#fee2e2;color:#b91c1c;font-size:14px;}
+.ckey.ceq{background:#1E7145;color:#fff;}
+@keyframes blinkpulse{0%,100%{background:#1E7145;color:#fff;box-shadow:0 0 0 0 rgba(30,113,69,.5);}50%{background:#16a34a;color:#fff;box-shadow:0 0 0 6px rgba(30,113,69,0);}}
+.blink{animation:blinkpulse 1s ease-in-out infinite;}
+.ticked-row td{background:#fef9c3;}
+.ticked-row .copycell:hover{background:#fef08a !important;}
+.area-b{font-size:12px;font-weight:700;color:#1F4E79;background:#eff6ff;padding:3px 10px;border-radius:20px;display:inline-block;}
+.act{background:#f3f4f6;border:none;border-radius:7px;padding:6px 10px;font-size:13px;cursor:pointer;font-family:inherit;margin-right:4px;}
+.act.del{background:#fee2e2;color:#b91c1c;}
+.addbtn{background:#1E7145;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.loading{text-align:center;padding:36px;color:var(--text-3);font-size:14px;}
+.msg{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:300;font-size:13px;padding:10px 18px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);display:none;max-width:90%;}
+.msg.ok{background:#dcfce7;color:#14532d;display:block;}
+.msg.bad{background:#fee2e2;color:#b91c1c;display:block;}
+
+/* Overview bars */
+.bar-bg{background:#f3f4f6;border-radius:10px;height:16px;overflow:hidden;min-width:120px;}
+.bar-fill{background:#1E7145;height:100%;border-radius:10px;transition:width .4s;}
+.pct{font-size:12px;font-weight:700;color:#374151;}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:200;}
+.modal-bg.show{display:flex;}
+.modal{background:#fff;border-radius:16px;padding:22px;width:100%;max-width:400px;box-shadow:0 12px 40px rgba(0,0,0,.3);}
+.modal h3{font-size:16px;font-weight:700;color:#1F4E79;margin-bottom:16px;}
+.modal .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.modal .btns{display:flex;gap:8px;margin-top:6px;}
+.modal .btns button{flex:1;}
+.cancel{background:#f3f4f6;color:#374151;}
+.hint{font-size:11px;color:var(--text-3);margin-top:3px;}
+
+@media(max-width:560px){
+  #pane-users th:nth-child(2),#pane-users td:nth-child(2){display:none;} /* hide Name column on narrow screens (Users table only) */
+}
+.pvbtn{background:rgba(255,255,255,.14);color:#fff;border:none;border-radius:7px;padding:7px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+.pvbtn:hover{background:rgba(255,255,255,.26);}
+.pvbtn.on{background:#fbbf24;color:#111;}
+/* ── Dashboard: instrument-panel aesthetic ───────────────────
+   Grounded in the subject: this app reads electricity meters, so the
+   dashboard borrows the meter's own vocabulary — a swept dial, tick
+   marks, and odometer digits — instead of generic stat cards.       */
+.dsh-panel{
+  background:
+    linear-gradient(180deg,#12263d 0%,#0d1b2c 100%);
+  border-radius:16px;padding:22px;color:#e8eef5;
+  position:relative;overflow:hidden;
+  display:flex;gap:26px;align-items:center;flex-wrap:wrap;
+}
+/* faint schematic grid, like a panel face */
+.dsh-panel::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(#ffffff08 1px,transparent 1px),linear-gradient(90deg,#ffffff08 1px,transparent 1px);
+  background-size:22px 22px;
+}
+.dsh-panel>*{position:relative;}
+.dsh-eyebrow{
+  font-family:'JetBrains Mono',ui-monospace,monospace;
+  font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#5f8fb5;
+}
+.dsh-odo{
+  font-family:'JetBrains Mono',ui-monospace,monospace;
+  font-weight:700;font-size:38px;letter-spacing:.04em;color:#ffc53d;
+  line-height:1.05;
+  text-shadow:0 0 18px rgba(255,197,61,.28);
+}
+.dsh-odo small{font-size:20px;color:#5f8fb5;text-shadow:none;}
+.dsh-sub{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#9fb6cc;margin-top:2px;}
+
+/* metric chips */
+.dsh-chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin:14px 0 18px;}
+.dsh-chip{
+  background:var(--surface);border:1px solid var(--border-2);border-left:3px solid var(--c,#1F4E79);
+  border-radius:11px;padding:11px 13px;
+}
+.dsh-chip .n{
+  font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;
+  font-size:21px;color:var(--text);line-height:1.2;
+}
+.dsh-chip .l{
+  font-family:'Space Grotesk',sans-serif;font-size:11px;color:var(--text-2);
+  letter-spacing:.03em;margin-top:1px;
+}
+.dsh-h{
+  font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:var(--text);
+  display:flex;align-items:center;gap:8px;margin:20px 0 10px;
+}
+.dsh-h::after{content:"";flex:1;height:1px;background:var(--border);}
+.dsh-card{background:var(--surface);border:1px solid var(--border-2);border-radius:13px;padding:14px;}
+
+/* month bars */
+.dsh-mrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f2f5f8;}
+.dsh-mrow:last-child{border-bottom:none;}
+.dsh-mlab{
+  font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;
+  color:var(--text-2);width:58px;flex:none;
+}
+.dsh-track{flex:1;height:16px;background:var(--surface-2);border-radius:4px;overflow:hidden;display:flex;}
+.dsh-seg{height:100%;}
+.dsh-mpct{
+  font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;
+  font-size:12px;color:var(--text);width:38px;text-align:right;flex:none;
+}
+.dsh-mcount{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;color:#8a97a6;width:78px;text-align:right;flex:none;}
+.dsh-legend{display:flex;gap:14px;font-size:11px;color:#6b7b8c;margin-top:10px;font-family:'Space Grotesk',sans-serif;}
+.dsh-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;}
+.dsh-sel{
+  font-family:'Space Grotesk',sans-serif;font-weight:500;
+  padding:8px 12px;border:1.5px solid #d8e0e8;border-radius:9px;font-size:13px;
+  background:#fff;color:#0d1b2c;outline:none;
+}
+@media(max-width:640px){ .dsh-panel{justify-content:center;text-align:center;} }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="v-login" class="login-wrap">
+  <div class="grid-bg" id="grid-bg" aria-hidden="true"></div>
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="ico">⚡</div>
+      <h2>Unbilled Admin</h2>
+      <p>STELCO — meter reading &amp; billing</p>
+    </div>
+    <div class="lfield">
+      <label>Username</label>
+      <input type="text" id="l-user" placeholder="Admin username" autocomplete="username" autocapitalize="none">
+    </div>
+    <div class="lfield">
+      <label>Password</label>
+      <input type="password" id="l-pass" placeholder="Password" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="bigbtn" id="login-btn" onclick="doLogin()">Sign In</button>
+    <div class="err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="v-main" style="display:none">
+  <div class="hdr">
+    <div class="hdr-in">
+      <span style="font-size:20px">🛠️</span>
+      <h1>Unbilled Admin <span style="font-size:11px;font-weight:400;opacity:.6;">v73 · security</span></h1>
+      <span class="who" id="who"></span>
+      <button onclick="toggleTheme()" id="theme-btn" title="Switch light / dark" style="margin-right:6px;">🌙</button>
+      <button onclick="openPwModal()" style="margin-right:6px;">🔑 Password</button>
+      <button onclick="doLogout()">Log out</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="tabs-wrap">
+    <div class="tabs">
+      <button class="tab" id="tab-dash" onclick="switchTab('dash')">📈 Dashboard</button>
+      <button class="tab active" id="tab-users" onclick="switchTab('users')">👥 Users</button>
+      <button class="tab" id="tab-overview" onclick="switchTab('overview')">📊 Area Progress</button>
+      <button class="tab" id="tab-sup" onclick="switchTab('sup')">📤 Upload Unbilled</button>
+      <button class="tab" id="tab-entered" onclick="switchTab('entered')">✅ Unbilled Taken</button>
+      <button class="tab" id="tab-new" onclick="switchTab('new')">📋 Unbilled New</button>
+      <button class="tab" id="tab-nometer" onclick="switchTab('nometer')">🚫 No-Meter</button>
+      <button class="tab" id="tab-report" onclick="switchTab('report')">📄 Area Report</button>
+    </div>
+    </div>
+
+    <div class="msg" id="msg"></div>
+
+    <!-- SUPERVISOR TAB — CSV import -->
+    <div id="pane-sup" style="display:none">
+      <div class="card">
+        <h3>Upload area unbilled file</h3>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:14px;line-height:1.5;">
+          Upload the exported unbilled file, the date should be same as current reading date.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:440px;">
+          <div class="lfield">
+            <label>File date</label>
+            <input type="date" id="sup-date" onchange="showSupDateLbl()" style="width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:15px;font-family:inherit;outline:none;color:#111;background:#fff;">
+            <div id="sup-date-lbl" style="font-size:11px;color:#1E7145;margin-top:3px;font-weight:700;"></div>
+          </div>
+          <div class="lfield">
+            <label>Mode</label>
+            <select id="sup-mode">
+              <option value="append" selected>Append to existing</option>
+            </select>
+            <div class="hint" style="margin-top:3px;">Existing accounts for the same month are skipped as duplicates.</div>
+          </div>
+        </div>
+        <div class="lfield" style="max-width:440px;">
+          <label>Detected area</label>
+          <div id="sup-area-detect" style="padding:11px 14px;border:1.5px dashed #d1d5db;border-radius:9px;font-size:14px;color:#9ca3af;background:#fafafa;">Choose a file to detect the area</div>
+        </div>
+        <div class="lfield" style="max-width:440px;">
+          <label>Data file (XLS / XLSX / CSV)</label>
+          <input type="file" id="sup-file" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onchange="handleCsvFile(this)"
+            style="width:100%;padding:10px;border:1.5px dashed #d1d5db;border-radius:9px;font-size:14px;font-family:inherit;background:#fafafa;">
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;color:#374151;margin-top:8px;cursor:pointer;">
+            <input type="checkbox" id="sup-header" checked onchange="reparseCsv()"> First row is a header (skip it)
+          </label>
+        </div>
+        <div id="sup-datechk" style="display:none;font-size:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 11px;margin-bottom:10px;"></div>
+        <div id="sup-preview"></div>
+        <button class="bigbtn" id="sup-upload" onclick="doCsvUpload()" style="max-width:440px;margin-top:10px;" disabled>Upload to sheet</button>
+        <div class="err" id="sup-err"></div>
+      </div>
+    </div>
+
+    <!-- ENTERED READINGS TAB -->
+    <div id="pane-entered" style="display:none">
+     <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+      <div class="card" style="flex:1;min-width:320px;">
+        <h3>
+          Accounts with new readings
+          <span style="display:flex;gap:8px;">
+            <button class="addbtn" id="ent-edit-btn" style="background:#2563eb;" onclick="toggleEntEdit()">✏️ Edit reading</button>
+            <button class="addbtn" id="ent-save-btn" style="background:#0f766e;" onclick="saveEnteredReadings()" disabled>💾 Save</button>
+            <button class="addbtn" id="lock-btn" style="background:#b45309;" onclick="lockSelected()" disabled>🔒 Mark selected done → billing</button>
+          </span>
+        </h3>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:12px;line-height:1.5;">
+          These accounts have a new reading entered by field staff. <b>Click any cell to copy it</b>
+          for pasting into the billing program. Tick a row once you've entered it into billing —
+          then press <b>Mark selected done</b> to lock it (locked rows can no longer be changed and
+          are archived at month close).
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px;">
+          <div class="lfield" style="margin:0;min-width:150px;">
+            <label>Area</label>
+            <select id="ent-area" onchange="onEntAreaChange()"><option value="">Select area…</option></select>
+          </div>
+          <div class="lfield" style="margin:0;min-width:160px;">
+            <label>R_DATE (optional)</label>
+            <input type="date" id="ent-date" onchange="onEntAreaChange()"
+              style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;font-family:inherit;outline:none;color:#111;background:#fff;">
+          </div>
+          <button class="act" id="ent-refresh-btn" style="height:40px;" onclick="refreshEntered()">🔄 Refresh</button>
+          <button class="act" style="height:40px;" onclick="clearEnteredFilters()">Clear</button>
+        </div>
+        <div id="entered-body" class="loading" style="color:#9ca3af;">Select an area and press Load.</div>
+      </div>
+
+      <!-- Projection calculator -->
+      <div class="card" style="width:260px;flex:none;position:sticky;top:16px;align-self:flex-start;">
+        <h3 style="margin-bottom:4px;">📐 Projection</h3>
+        <div class="hint" style="margin-bottom:12px;">Tick a row to load its readings.</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <div style="font-size:11px;color:#6b7280;margin-bottom:3px;">Previous</div>
+            <input type="number" id="pj-prev" oninput="pjCalc()" placeholder="—"
+              style="width:100%;padding:8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:14px;font-family:inherit;outline:none;">
+          </div>
+          <div>
+            <div style="font-size:11px;color:#6b7280;margin-bottom:3px;">Current</div>
+            <input type="number" id="pj-cur" oninput="pjCalc()" placeholder="—"
+              style="width:100%;padding:8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:14px;font-family:inherit;outline:none;">
+          </div>
+          <div>
+            <div style="font-size:11px;color:#6b7280;margin-bottom:3px;">Reading days</div>
+            <input type="number" id="pj-days" oninput="pjCalc()" placeholder="—"
+              style="width:100%;padding:8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:14px;font-family:inherit;outline:none;">
+          </div>
+          <div>
+            <div style="font-size:11px;color:#6b7280;margin-bottom:3px;">Target days</div>
+            <input type="number" id="pj-target" value="30" oninput="pjCalc()"
+              style="width:100%;padding:8px;border:1.5px solid #2563eb;border-radius:8px;font-size:14px;font-weight:700;font-family:inherit;outline:none;">
+          </div>
+        </div>
+
+        <div style="background:#f9fafb;border-radius:9px;padding:10px 12px;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+            <span style="color:#6b7280;">Daily usage</span>
+            <span id="pj-daily" style="font-weight:700;color:#111;">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="color:#6b7280;font-size:13px;">Projected reading</span>
+            <span id="pj-result" onclick="pjCopyResult()" title="Click to copy"
+              style="font-weight:800;font-size:18px;color:#1E7145;cursor:pointer;">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;border-top:1px solid #e5e7eb;padding-top:6px;">
+            <span style="color:#6b7280;font-size:13px;">Projected date</span>
+            <span id="pj-date" style="font-weight:700;color:#1d4ed8;">—</span>
+          </div>
+          <div id="pj-note" style="display:none;font-size:11px;color:#b45309;background:#fffbeb;border-radius:6px;padding:6px 8px;margin-top:6px;line-height:1.4;"></div>
+        </div>
+        <div id="pj-remarks-wrap" style="margin-top:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 10px;">
+          <div style="font-size:11px;font-weight:700;color:#b91c1c;margin-bottom:3px;">📝 Remarks</div>
+          <div id="pj-remarks" style="font-size:12px;color:#7f1d1d;line-height:1.4;">Tick a row to see its remarks.</div>
+        </div>
+
+        <!-- Meter photo for the ticked row -->
+        <div id="pj-photo-wrap" style="margin-top:14px;border-top:1px solid #e5e7eb;padding-top:12px;">
+          <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px;">📷 Meter photo</div>
+          <div id="pj-photo" style="font-size:12px;color:#9ca3af;">Tick a row to view its photo.</div>
+        </div>
+      </div>
+     </div>
+    </div>
+
+    <!-- DASHBOARD TAB -->
+    <div id="pane-dash" style="display:none">
+      <div class="card">
+        <h3 style="justify-content:space-between;">
+          <span>Coverage dashboard — <span id="dash-month" style="color:#6b7280;font-weight:400;">…</span></span>
+          <button class="act" onclick="loadDashboard(true)">🔄 Refresh</button>
+        </h3>
+        <div id="dash-body" class="loading" style="color:#9ca3af;">Loading…</div>
+      </div>
+    </div>
+
+    <!-- UNBILLED NEW TAB -->
+    <div id="pane-new" style="display:none">
+      <div class="card">
+        <h3>
+          Unbilled — new (not taken)
+          <span style="display:flex;gap:8px;">
+            <button class="addbtn" id="rd-save-btn" style="background:#0f766e;" onclick="saveReadings()" disabled>💾 Save readings</button>
+            <button class="addbtn" id="att-btn" style="background:#7c3aed;" onclick="tagAs('ATTENDED')" disabled>✔️ Mark Attended</button>
+            <button class="addbtn" id="chg-btn" style="background:#0ea5e9;" onclick="tagAs('CHANGEOVER')" disabled>🔁 Tag as Changeover</button>
+            <button class="addbtn" id="rmk-save-btn" style="background:#1E7145;" onclick="saveRemarks()" disabled>💾 Save remarks</button>
+            <button class="act" onclick="loadUnbilledNew(true)">🔄 Refresh</button>
+          </span>
+        </h3>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:12px;line-height:1.5;">
+          Accounts with no reading taken yet (excludes no-meter accounts). Edit the <b>Remarks</b>
+          column inline, then press <b>Save remarks</b> to write all changes back to the sheet.
+        </div>
+        <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label style="font-size:13px;font-weight:600;color:#374151;">Area:</label>
+          <select id="new-area-filter" onchange="renderUnbilledNew()" class="dsh-sel"><option value="all">All areas</option></select>
+          <label style="font-size:13px;font-weight:600;color:#374151;">R_DATE:</label>
+          <select id="new-rdate-filter" onchange="renderUnbilledNew()" class="dsh-sel"><option value="all">All dates</option></select>
+          <span id="rd-date-wrap" style="display:none;align-items:center;gap:8px;margin-left:auto;padding:7px 11px;border:1px solid #99f6e4;background:#f0fdfa;border-radius:9px;">
+            <span style="font-size:12px;font-weight:700;color:#0f766e;white-space:nowrap;">📅 Reading date</span>
+            <input type="date" id="rd-date" onchange="showRdDateLbl()" style="padding:5px 8px;border:1.5px solid #5eead4;border-radius:7px;font-size:13px;font-family:inherit;outline:none;">
+            <span id="rd-date-lbl" style="font-size:11px;color:#0f766e;font-weight:700;white-space:nowrap;"></span>
+          </span>
+        </div>
+        <div id="new-note" style="display:none;font-size:12px;color:#075985;background:#e0f2fe;border-radius:8px;padding:8px 12px;margin-bottom:10px;"></div>
+        <div id="new-body" class="loading" style="color:#9ca3af;">Loading…</div>
+      </div>
+    </div>
+
+    <!-- AREA REPORT TAB -->
+    <div id="pane-report" style="display:none">
+      <div class="card">
+        <h3>
+          Area performance report
+          <span style="display:flex;gap:8px;">
+            <button class="act" onclick="printReport()">🖨️ Print</button>
+          </span>
+        </h3>
+        <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:16px;">
+          <div class="lfield" style="margin:0;min-width:150px;">
+            <label>Area</label>
+            <select id="rep-area" class="dsh-sel" style="width:100%;"><option value="">Select area…</option></select>
+          </div>
+          <div class="lfield" style="margin:0;min-width:150px;">
+            <label>Month (optional)</label>
+            <input type="month" id="rep-month" class="dsh-sel" style="width:100%;">
+          </div>
+          <button class="addbtn" style="height:40px;background:#1E7145;" onclick="loadReport()">Generate</button>
+        </div>
+        <div id="rep-body" class="loading" style="color:#9ca3af;">Select an area and press Generate.</div>
+      </div>
+    </div>
+
+    <!-- NO-METER TAB -->
+    <div id="pane-nometer" style="display:none">
+      <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+        <div class="card" style="flex:1;min-width:320px;">
+          <h3>Mark an account as No-Meter</h3>
+          <div id="nm-areas-hint" style="display:none;font-size:12px;color:#075985;background:#e0f2fe;border-radius:8px;padding:8px 12px;margin-bottom:14px;"></div>
+          <div style="display:flex;gap:10px;align-items:end;margin-bottom:14px;flex-wrap:wrap;">
+            <div class="lfield" style="margin:0;min-width:180px;">
+              <label>Account number</label>
+              <input type="number" id="nm-acno" placeholder="e.g. 65567"
+                onkeydown="if(event.key==='Enter')nmLookup()"
+                style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:15px;font-family:inherit;outline:none;">
+            </div>
+            <button class="addbtn" style="height:42px;background:#1F4E79;" onclick="nmLookup()">🔍 Look up</button>
+          </div>
+          <div id="nm-result"></div>
+        </div>
+
+        <!-- Current no-meter list -->
+        <div class="card" style="width:300px;flex:none;">
+          <h3 style="display:flex;justify-content:space-between;align-items:center;">
+            No-meter list
+            <button class="act" onclick="nmLoadList()">🔄</button>
+          </h3>
+          <div id="nm-list" class="loading" style="color:#9ca3af;">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- USERS TAB -->
+    <div id="pane-users">
+      <div class="card">
+        <h3>
+          Users
+          <button class="addbtn" onclick="openAdd()">＋ Add user</button>
+        </h3>
+        <div id="users-body" class="loading">Loading users...</div>
+      </div>
+    </div>
+
+    <!-- OVERVIEW TAB -->
+    <div id="pane-overview" style="display:none">
+      <div class="card">
+        <h3>
+          Readings progress by area
+          <button class="addbtn" style="background:#1F4E79" onclick="loadOverview(true)">🔄 Refresh</button>
+        </h3>
+        <div id="ov-body" class="loading">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD / EDIT USER MODAL -->
+<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3 id="m-title">Add user</h3>
+    <div class="lfield">
+      <label>Username</label>
+      <input type="text" id="m-username" autocapitalize="none" autocomplete="off">
+    </div>
+    <div class="lfield">
+      <label>Full name</label>
+      <input type="text" id="m-name" autocomplete="off">
+    </div>
+    <div class="row2">
+      <div class="lfield">
+        <label>Area</label>
+        <select id="m-area"></select>
+      </div>
+      <div class="lfield">
+        <label>Role</label>
+        <select id="m-role" onchange="onRoleChange()">
+          <option value="worker">Field Staff</option>
+          <option value="supervisor">Supervisor</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+    </div>
+    <div class="lfield" id="m-areas-wrap" style="display:none;">
+      <label>Assigned areas <span style="font-weight:400;color:#9ca3af;">(supervisor can view only these in Unbilled Taken)</span></label>
+      <div id="m-areas" style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;padding:8px;border:1.5px solid #e5e7eb;border-radius:9px;"></div>
+    </div>
+    <div class="lfield">
+      <label id="m-pass-label">Password</label>
+      <input type="text" id="m-password" autocomplete="off" autocapitalize="none">
+      <div class="hint" id="m-pass-hint" style="display:none">Leave blank to keep the current password.</div>
+    </div>
+    <div class="err" id="m-err"></div>
+    <div class="btns" style="display:flex;gap:8px;margin-top:10px;">
+      <button class="bigbtn cancel" onclick="closeModal()">Cancel</button>
+      <button class="bigbtn" id="m-save" onclick="saveUser()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "https://unbilled-server.onrender.com/api/legacy";
+let session = null;   // { token, user:{username,name,area,role} }
+let users = [];
+let editingUsername = null; // null = adding
+
+function tok(){ return session ? session.token : ''; }
+
+async function api(body) {
+  const res = await fetch(API, { method:'POST', body: JSON.stringify(Object.assign({}, body, { token: tok() })) });
+  const data = await res.json();
+  if (data && data.error === 'auth') { forceRelogin(); throw new Error('auth'); }
+  return data;
+}
+
+function forceRelogin() {
+  session = null;
+  localStorage.removeItem('ub_admin_session');
+  document.getElementById('v-main').style.display = 'none';
+  document.getElementById('v-login').style.display = 'flex';
+  showLoginErr('Session expired — please sign in again.');
+}
+
+function showLoginErr(m) {
+  const e = document.getElementById('login-err');
+  e.textContent = m; e.style.display = 'block';
+}
+
+function flash(m, ok) {
+  const el = document.getElementById('msg');
+  el.className = 'msg ' + (ok ? 'ok' : 'bad');
+  el.textContent = m;
+  setTimeout(()=>{ el.className='msg'; }, 4000);
+}
+
+/* ── Login / logout ── */
+async function doLogin() {
+  const username = document.getElementById('l-user').value.trim();
+  const password = document.getElementById('l-pass').value.trim();
+  const err = document.getElementById('login-err');
+  const btn = document.getElementById('login-btn');
+  err.style.display = 'none';
+  if (!username || !password) { showLoginErr('Please enter username and password.'); return; }
+  btn.textContent = 'Signing in...'; btn.disabled = true;
+  try {
+    const res = await fetch(API, { method:'POST', body: JSON.stringify({ action:'login', username, password }) });
+    const data = await res.json();
+    if (data.success) {
+      const role = data.user && data.user.role;
+      if (role !== 'admin' && role !== 'supervisor') {
+        showLoginErr('This account does not have admin or supervisor access.');
+      } else {
+        session = { token: data.token, user: data.user };
+        localStorage.setItem('ub_admin_session', JSON.stringify(session));
+        enterMain();
+      }
+    } else {
+      showLoginErr(data.message || 'Invalid username or password.');
+    }
+  } catch(e) {
+    showLoginErr('Could not connect. Check internet.');
+  }
+  btn.textContent = 'Sign In'; btn.disabled = false;
+}
+
+function doLogout() {
+  if (!confirm('Log out?')) return;
+  session = null;
+  localStorage.removeItem('ub_admin_session');
+  document.getElementById('l-user').value = '';
+  document.getElementById('l-pass').value = '';
+  document.getElementById('v-main').style.display = 'none';
+  document.getElementById('v-login').style.display = 'flex';
+}
+
+function enterMain() {
+  document.getElementById('v-login').style.display = 'none';
+  document.getElementById('v-main').style.display = 'block';
+  const roleTag = session.user.role === 'admin' ? 'Admin' : 'Supervisor';
+  document.getElementById('who').textContent = '👤 ' + (session.user.name || session.user.username) + ' · ' + roleTag;
+  const isAdmin = session.user.role === 'admin';
+  // Admin sees:      Dashboard, Users, Area Progress, Unbilled New, No-Meter, Area Report
+  // Supervisor sees:  Area Progress, Upload Unbilled, Unbilled Taken, Unbilled New, No-Meter, Area Report
+  const ADMIN_TABS = ['tab-dash', 'tab-users'];              // admin only
+  const SUP_TABS   = ['tab-sup', 'tab-entered'];             // supervisor only
+  ADMIN_TABS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = isAdmin ? '' : 'none'; });
+  SUP_TABS.forEach(id   => { const el = document.getElementById(id); if (el) el.style.display = isAdmin ? 'none' : ''; });
+  // tab-overview, tab-new, tab-nometer, tab-report are shared (server scopes the data)
+  initSupPane();
+  if (isAdmin) fillAreaSelect();
+
+  // Show a full-screen "initializing" overlay while everything preloads,
+  // then land on the Dashboard (admins) / Upload (supervisors).
+  showInitOverlay();
+  preloadEverything().then(() => {
+    hideInitOverlay();
+    if (isAdmin) switchTab('dash');
+    else switchTab('sup');
+  });
+}
+
+function showInitOverlay() {
+  let ov = document.getElementById('init-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'init-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:#1F4E79;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;';
+    ov.innerHTML =
+      '<div style="font-size:40px;margin-bottom:16px;">⚡</div>' +
+      '<div style="font-size:18px;font-weight:700;margin-bottom:8px;">Initializing…</div>' +
+      '<div id="init-status" style="font-size:14px;opacity:.85;margin-bottom:20px;">Please wait while the system loads your data.</div>' +
+      '<div style="width:220px;height:6px;background:rgba(255,255,255,.2);border-radius:6px;overflow:hidden;">' +
+        '<div id="init-bar" style="width:10%;height:100%;background:#fbbf24;border-radius:6px;transition:width .4s;"></div></div>';
+    document.body.appendChild(ov);
+  }
+  ov.style.display = 'flex';
+}
+function setInitStatus(msg, pct) {
+  const s = document.getElementById('init-status'), b = document.getElementById('init-bar');
+  if (s && msg) s.textContent = msg;
+  if (b && pct != null) b.style.width = pct + '%';
+}
+function hideInitOverlay() {
+  setInitStatus('Ready!', 100);
+  const ov = document.getElementById('init-overlay');
+  if (ov) setTimeout(() => { ov.style.display = 'none'; }, 250);
+}
+
+// Preload caches for each tab. Returns a promise that resolves when done.
+let newCache = null;      // Unbilled New rows
+let nmListCache = null;   // No-meter list rows
+let dashCache = null;     // Dashboard aggregates
+let usersCache = null;    // Admin: user list
+let overviewCache = null; // Admin: area progress
+
+function preloadEverything() {
+  const isAdmin = session.user.role === 'admin';
+  fetch(API + '?action=ping').catch(() => {}); // wake the container
+
+  // Block ONLY on the landing tab's data. Waiting for every endpoint meant one
+  // slow call held the whole login hostage — which is what makes this feel slow
+  // "on and off": a cold container makes ALL of them slow at once.
+  let landing;
+  if (isAdmin) {
+    setInitStatus('Loading dashboard…', 45);
+    landing = api({ action: 'dashboard' }).then(d => { if (d && d.success) dashCache = d; }).catch(() => {});
+  } else {
+    setInitStatus('Loading your areas…', 45);
+    startPreload();
+    landing = preloadPromise || Promise.resolve();
+  }
+
+  // The other tabs fill in behind the scenes. Each has a cache-aware loader, so
+  // if the user opens one before it arrives it just fetches then — no error.
+  setTimeout(() => {
+    if (isAdmin) api({ action: 'admin_list_users' }).then(d => { if (d && d.success) usersCache = d.users || []; }).catch(() => {});
+    api({ action: 'admin_overview' }).then(d => { if (d && d.success) overviewCache = d.areas || []; }).catch(() => {});
+    api({ action: 'unbilled_new' }).then(d => { if (d && d.success) newCache = d.rows || []; }).catch(() => {});
+    api({ action: 'nometer_list' }).then(d => { if (d && d.success) nmListCache = d.rows || []; }).catch(() => {});
+  }, 0);
+
+  // Never let the overlay hang. On a cold start, show the app after 6s anyway —
+  // the landing tab finishes loading on its own.
+  const cap = new Promise(res => setTimeout(res, 6000));
+  return Promise.race([landing, cap]).then(() => setInitStatus('Almost ready…', 92));
+}
+
+/* ── Tabs ── */
+function switchTab(t) {
+  // Keep each role out of the other's panes, whatever tries to open them.
+  const isAdminRole = session.user.role === 'admin';
+  const ADMIN_ONLY = ['dash', 'users'];
+  const SUP_ONLY   = ['sup', 'entered'];
+  if (!isAdminRole && ADMIN_ONLY.indexOf(t) !== -1) t = 'sup';        // supervisor → Upload
+  if (isAdminRole  && SUP_ONLY.indexOf(t)   !== -1) t = 'dash';       // admin → Dashboard
+  document.getElementById('tab-dash').classList.toggle('active', t==='dash');
+  document.getElementById('tab-users').classList.toggle('active', t==='users');
+  document.getElementById('tab-overview').classList.toggle('active', t==='overview');
+  document.getElementById('tab-sup').classList.toggle('active', t==='sup');
+  document.getElementById('tab-entered').classList.toggle('active', t==='entered');
+  document.getElementById('tab-new').classList.toggle('active', t==='new');
+  document.getElementById('tab-nometer').classList.toggle('active', t==='nometer');
+  document.getElementById('tab-report').classList.toggle('active', t==='report');
+  document.getElementById('pane-users').style.display = t==='users' ? 'block' : 'none';
+  document.getElementById('pane-overview').style.display = t==='overview' ? 'block' : 'none';
+  document.getElementById('pane-sup').style.display = t==='sup' ? 'block' : 'none';
+  document.getElementById('pane-entered').style.display = t==='entered' ? 'block' : 'none';
+  document.getElementById('pane-new').style.display = t==='new' ? 'block' : 'none';
+  document.getElementById('pane-nometer').style.display = t==='nometer' ? 'block' : 'none';
+  document.getElementById('pane-report').style.display = t==='report' ? 'block' : 'none';
+  document.getElementById('pane-dash').style.display = t==='dash' ? 'block' : 'none';
+  if (t !== 'entered') { entStopPolling(); entBlinkRefresh(false); }
+  if (t==='users') loadUsers();
+  if (t==='overview') loadOverview();
+  if (t==='dash') loadDashboard();
+  if (t==='entered') initEnteredTab();
+  if (t==='new') loadUnbilledNew();
+  if (t==='nometer') { nmShowAreas(); nmLoadList(); }
+  if (t==='report') initReportTab();
+}
+
+/* ── Users ── */
+async function loadUsers(force) {
+  const body = document.getElementById('users-body');
+  if (!force && usersCache) { users = usersCache; renderUsers(); return; }
+  body.className = 'loading'; body.textContent = 'Loading users...';
+  try {
+    const d = await api({ action:'admin_list_users' });
+    if (!d.success) { body.textContent = d.message || 'Could not load users.'; return; }
+    users = d.users || [];
+    usersCache = users;
+    renderUsers();
+  } catch(e) {
+    if (e.message !== 'auth') body.textContent = 'Could not connect.';
+  }
+}
+
+function renderUsers() {
+  const body = document.getElementById('users-body');
+  body.className = '';
+  if (!users.length) { body.innerHTML = '<div class="loading">No users yet — add the first one.</div>'; return; }
+  body.innerHTML = `<table>
+    <thead><tr><th>Username</th><th>Name</th><th>Area</th><th>Role</th><th></th></tr></thead>
+    <tbody>` + users.map(u => `
+      <tr>
+        <td style="font-weight:700;color:#1F4E79;">${esc(u.username)}${u.username.toLowerCase()===session.user.username.toLowerCase()?' <span style="font-size:11px;color:#9ca3af;">(you)</span>':''}</td>
+        <td>${esc(u.name)||'—'}</td>
+        <td>${u.role==='supervisor' && u.areas && u.areas.length
+          ? u.areas.map(a=>'<span class="area-b" style="margin:1px;">'+esc(a)+'</span>').join('')
+          : '<span class="area-b">'+(u.area==='all'||!u.area?'All':'Area '+esc(u.area))+'</span>'}</td>
+        <td><span class="role-b role-${u.role}">${u.role==='admin'?'Admin':u.role==='supervisor'?'Supervisor':'Field Staff'}</span></td>
+        <td style="text-align:right;white-space:nowrap;">
+          <button class="act" onclick="openEdit('${esc(u.username)}')">✏️ Edit</button>
+          <button class="act del" onclick="delUser('${esc(u.username)}')">🗑</button>
+        </td>
+      </tr>`).join('') + `</tbody></table>`;
+}
+
+function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+/* ── Add / edit modal ── */
+function fillAreaSelect() {
+  const sel = document.getElementById('m-area');
+  sel.innerHTML = '<option value="all">All areas</option>';
+  for (let i = 1; i <= 24; i++) {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = 'Area ' + i;
+    sel.appendChild(o);
+  }
+}
+
+// Render the assigned-area checkbox grid (areas 1..24), preselecting `sel`.
+function fillSupAreaChecks(sel) {
+  const box = document.getElementById('m-areas');
+  const chosen = {};
+  (sel || []).forEach(a => { chosen[String(a).trim()] = true; });
+  let html = '';
+  for (let i = 1; i <= 24; i++) {
+    html += '<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;">' +
+      '<input type="checkbox" class="m-area-cb" value="' + i + '"' + (chosen[String(i)] ? ' checked' : '') + '> ' + i + '</label>';
+  }
+  box.innerHTML = html;
+}
+
+function getSelectedSupAreas() {
+  return Array.from(document.querySelectorAll('.m-area-cb')).filter(x => x.checked).map(x => x.value);
+}
+
+// Show the assigned-areas field only when Role = supervisor
+function onRoleChange() {
+  const isSup = document.getElementById('m-role').value === 'supervisor';
+  document.getElementById('m-areas-wrap').style.display = isSup ? 'block' : 'none';
+}
+
+function openAdd() {
+  editingUsername = null;
+  document.getElementById('m-title').textContent = 'Add user';
+  document.getElementById('m-username').value = '';
+  document.getElementById('m-username').disabled = false;
+  document.getElementById('m-name').value = '';
+  document.getElementById('m-area').value = 'all';
+  document.getElementById('m-role').value = 'worker';
+  fillSupAreaChecks([]);
+  onRoleChange();
+  document.getElementById('m-password').value = '';
+  document.getElementById('m-pass-label').textContent = 'Password';
+  document.getElementById('m-pass-hint').style.display = 'none';
+  document.getElementById('m-err').style.display = 'none';
+  document.getElementById('modal-bg').classList.add('show');
+  setTimeout(()=>document.getElementById('m-username').focus(), 100);
+}
+
+function openEdit(username) {
+  const u = users.find(x => x.username === username);
+  if (!u) return;
+  editingUsername = username;
+  document.getElementById('m-title').textContent = 'Edit user — ' + username;
+  document.getElementById('m-username').value = u.username;
+  document.getElementById('m-username').disabled = true;
+  document.getElementById('m-name').value = u.name || '';
+  document.getElementById('m-area').value = (u.area && u.area !== 'all') ? u.area : 'all';
+  if (document.getElementById('m-area').value !== String(u.area) && u.area && u.area !== 'all') {
+    // area outside 1–24 — add it so it isn't silently changed
+    const o = document.createElement('option');
+    o.value = u.area; o.textContent = 'Area ' + u.area;
+    document.getElementById('m-area').appendChild(o);
+    document.getElementById('m-area').value = u.area;
+  }
+  document.getElementById('m-role').value = u.role;
+  fillSupAreaChecks(u.areas || []);
+  onRoleChange();
+  document.getElementById('m-password').value = '';
+  document.getElementById('m-pass-label').textContent = 'New password (optional)';
+  document.getElementById('m-pass-hint').style.display = 'block';
+  document.getElementById('m-err').style.display = 'none';
+  document.getElementById('modal-bg').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('modal-bg').classList.remove('show');
+}
+
+async function saveUser() {
+  const errEl = document.getElementById('m-err');
+  errEl.style.display = 'none';
+  const username = document.getElementById('m-username').value.trim();
+  const name = document.getElementById('m-name').value.trim();
+  const area = document.getElementById('m-area').value;
+  const role = document.getElementById('m-role').value;
+  const password = document.getElementById('m-password').value.trim();
+  const areas = role === 'supervisor' ? getSelectedSupAreas() : [];
+
+  if (!username) { errEl.textContent = 'Username is required.'; errEl.style.display='block'; return; }
+  if (!editingUsername && !password) { errEl.textContent = 'Password is required for a new user.'; errEl.style.display='block'; return; }
+  if (role === 'supervisor' && !areas.length) { errEl.textContent = 'Assign at least one area to a supervisor.'; errEl.style.display='block'; return; }
+
+  const btn = document.getElementById('m-save');
+  btn.textContent = 'Saving...'; btn.disabled = true;
+  try {
+    let d;
+    if (editingUsername) {
+      const payload = { action:'admin_update_user', username: editingUsername, name, area, role, areas: areas.join(',') };
+      if (password) payload.password = password;
+      d = await api(payload);
+    } else {
+      d = await api({ action:'admin_add_user', username, password, name, area, role, areas: areas.join(',') });
+    }
+    if (d.success) {
+      closeModal();
+      flash(editingUsername ? 'User updated ✓' : 'User added ✓', true);
+      usersCache = null; loadUsers(true);
+    } else {
+      errEl.textContent = d.message || 'Could not save.';
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    if (e.message !== 'auth') { errEl.textContent = 'Could not connect.'; errEl.style.display='block'; }
+  }
+  btn.textContent = 'Save'; btn.disabled = false;
+}
+
+async function delUser(username) {
+  if (!confirm('Delete user "' + username + '"?\n\nThey will no longer be able to sign in.')) return;
+  try {
+    const d = await api({ action:'admin_delete_user', username });
+    if (d.success) { flash('User deleted ✓', true); usersCache = null; loadUsers(true); }
+    else flash(d.message || 'Could not delete.', false);
+  } catch(e) {
+    if (e.message !== 'auth') flash('Could not connect.', false);
+  }
+}
+
+/* ── Overview ── */
+async function loadOverview(force) {
+  const body = document.getElementById('ov-body');
+  if (!force && overviewCache) { renderOverview(overviewCache); return; }
+  body.className = 'loading'; body.textContent = 'Loading...';
+  try {
+    const d = await api({ action:'admin_overview' });
+    if (!d.success) { body.textContent = d.message || 'Could not load.'; return; }
+    overviewCache = d.areas || [];
+    renderOverview(overviewCache);
+  } catch(e) {
+    if (e.message !== 'auth') body.textContent = 'Could not connect.';
+  }
+}
+
+function renderOverview(areas) {
+  const body = document.getElementById('ov-body');
+  body.className = '';
+  if (!areas.length) { body.innerHTML = '<div class="loading">No account data found.</div>'; return; }
+  let tDone = 0, tPend = 0;
+  areas.forEach(a => { tDone += a.done; tPend += a.pending; });
+  const rows = areas.map(a => {
+    const total = a.done + a.pending;
+    const pct = total ? Math.round(a.done / total * 100) : 0;
+    return `<tr>
+      <td><span class="area-b">Area ${esc(a.area)}</span></td>
+      <td style="color:#16a34a;font-weight:700;">${a.done}</td>
+      <td style="color:#92400e;font-weight:700;">${a.pending}</td>
+      <td>${total}</td>
+      <td><div style="display:flex;align-items:center;gap:8px;">
+        <div class="bar-bg" style="flex:1;"><div class="bar-fill" style="width:${pct}%;"></div></div>
+        <span class="pct">${pct}%</span>
+      </div></td>
+    </tr>`;
+  }).join('');
+  const tTotal = tDone + tPend;
+  const tPct = tTotal ? Math.round(tDone / tTotal * 100) : 0;
+  body.innerHTML = `<table>
+    <thead><tr><th>Area</th><th>Done</th><th>Pending</th><th>Total</th><th style="min-width:160px;">Progress</th></tr></thead>
+    <tbody>${rows}
+      <tr style="background:#f9fafb;">
+        <td style="font-weight:800;">All</td>
+        <td style="color:#16a34a;font-weight:800;">${tDone}</td>
+        <td style="color:#92400e;font-weight:800;">${tPend}</td>
+        <td style="font-weight:800;">${tTotal}</td>
+        <td><div style="display:flex;align-items:center;gap:8px;">
+          <div class="bar-bg" style="flex:1;"><div class="bar-fill" style="width:${tPct}%;"></div></div>
+          <span class="pct">${tPct}%</span>
+        </div></td>
+      </tr>
+    </tbody></table>`;
+}
+
+/* ── Supervisor: XLS/XLSX/CSV import ── */
+let fileRowsAll = null, csvRows = null, csvName = '', detectedAreas = [];
+let rawRowsAll = null;              // pre-normalisation rows, for the date check
+let dbgCells = {};                  // ACNO -> the TRUE cell {t,v,w,z} from the date column
+let parseRoute = '';                // which parser handled the file (shown in the date check)
+const COL_ACNO_IDX = 1;             // 0-based column B = ACNO
+const FILE_AREA_COL = 7; // column G in the file = Area (matches the unbilled sheet)
+
+function handleCsvFile(input) {
+  const errEl = document.getElementById('sup-err');
+  errEl.style.display = 'none';
+  const f = input.files[0];
+  if (!f) { fileRowsAll = null; csvRows = null; renderCsvPreview(); return; }
+  csvName = f.name;
+  const ext = f.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+
+  if (ext === 'csv') {
+    reader.onload = e => { const p = parseCSV(e.target.result); rawRowsAll = p.map(r => r.slice()); fileRowsAll = normalizeDateCols(p); reparseCsv(); };
+    reader.readAsText(f);
+  } else {
+    // XLS / XLSX via SheetJS — first worksheet
+    reader.onload = e => {
+      try {
+        const buf = new Uint8Array(e.target.result);
+        const DATE_COL_IDX = [8, 11, 13]; // 0-based: I=PREV DATE, L=R_DATE, N=NEW DATE
+
+        // Many billing systems export an ".xls" that is really HTML or delimited
+        // TEXT. SheetJS coerces date-looking strings inside XLSX.read() using
+        // JavaScript's MONTH-FIRST rule ("08-09-2025" → 9 August), and no option
+        // prevents it. So sniff the real format and parse text ourselves.
+        const head = String.fromCharCode.apply(null, buf.slice(0, 512)).toLowerCase();
+        const isZip  = buf[0] === 0x50 && buf[1] === 0x4B;                       // xlsx  (PK)
+        const isBiff = buf[0] === 0xD0 && buf[1] === 0xCF;                       // real xls
+        const isHtml = head.indexOf('<table') !== -1 || head.indexOf('<html') !== -1 || head.indexOf('<?xml') !== -1;
+
+        let raw;
+        if (!isZip && !isBiff) {
+          // Text-based export (HTML table, or delimited text named .xls)
+          const text = new TextDecoder('utf-8').decode(buf);
+          if (isHtml) {
+            parseRoute = 'HTML table (.xls that is really HTML) — dates parsed DAY-FIRST';
+            raw = parseHtmlTable(text);
+          } else {
+            const delim = sniffDelimiter(text);
+            parseRoute = 'delimited text (.xls that is really ' +
+              (delim === '\t' ? 'TAB' : delim === ';' ? 'semicolon' : 'comma') +
+              '-separated) — dates parsed DAY-FIRST';
+            raw = parseDelimited(text, delim);
+          }
+          rawRowsAll = raw.map(r => r.slice());  // BEFORE normalisation — the original text
+          raw = normalizeDateCols(raw);          // text dates → ISO, DAY-FIRST
+        } else {
+          // Genuine binary spreadsheet: date serials are unambiguous, decode exactly.
+          parseRoute = 'genuine binary spreadsheet — date serials decoded exactly';
+          const wb = XLSX.read(buf, { type: 'array', cellDates: false });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const ref = XLSX.utils.decode_range(ws['!ref']);
+          raw = [];
+          for (let R = ref.s.r; R <= ref.e.r; R++) {
+            const row = [];
+            for (let C = ref.s.c; C <= ref.e.c; C++) {
+              const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+              if (!cell) { row.push(''); continue; }
+              if (DATE_COL_IDX.indexOf(C) !== -1) {
+                // Record what the cell REALLY is — the date check must not guess
+                if (C === 8) dbgCells[String(row[1] ?? '')] = { t: cell.t, v: cell.v, w: cell.w, z: cell.z };
+                if (cell.t === 'n') {
+                  const dc = XLSX.SSF.parse_date_code(cell.v);   // true serial → exact
+                  row.push(dc ? (dc.y + '-' + ('0'+dc.m).slice(-2) + '-' + ('0'+dc.d).slice(-2)) : cell.v);
+                } else {
+                  const iso = toIsoDayFirst(cell.w != null ? cell.w : cell.v);
+                  row.push(iso || (cell.w != null ? cell.w : cell.v));
+                }
+              } else {
+                row.push(cell.v != null ? cell.v : '');
+              }
+            }
+            raw.push(row);
+          }
+        }
+        rawRowsAll = raw.map(r => r.slice());
+        fileRowsAll = raw;
+        reparseCsv();
+      } catch(err) {
+        fileRowsAll = null; csvRows = null; renderCsvPreview();
+        errEl.textContent = 'Could not read the Excel file: ' + err.message;
+        errEl.style.display = 'block';
+      }
+    };
+    reader.readAsArrayBuffer(f);
+  }
+}
+
+function reparseCsv() {
+  if (!fileRowsAll) return;
+  let rows = fileRowsAll;
+  if (document.getElementById('sup-header').checked && rows.length) rows = rows.slice(1);
+  csvRows = rows;
+  renderCsvPreview();
+}
+
+function initSupPane() {
+  const d = document.getElementById('sup-date');
+  if (d && !d.value) d.value = new Date().toISOString().split('T')[0];
+  showSupDateLbl();
+}
+
+function parseCSV(text) {
+  const rows = []; let row = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i+1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i+1] === '\n') i++;
+        row.push(field); field = '';
+        if (row.length > 1 || row[0] !== '') rows.push(row);
+        row = [];
+      } else field += c;
+    }
+  }
+  row.push(field);
+  if (row.length > 1 || row[0] !== '') rows.push(row);
+  return rows;
+}
+
+function renderCsvPreview() {
+  const el = document.getElementById('sup-preview');
+  const btn = document.getElementById('sup-upload');
+  const areaEl = document.getElementById('sup-area-detect');
+  document.getElementById('sup-err').style.display = 'none';
+  if (!csvRows || !csvRows.length) {
+    el.innerHTML = '';
+    btn.disabled = true;
+    detectedAreas = [];
+    areaEl.textContent = 'Choose a file to detect the area';
+    areaEl.style.color = '#9ca3af';
+    return;
+  }
+
+  // Detect area(s) from column G
+  detectedAreas = Array.from(new Set(
+    csvRows.map(r => String(r[FILE_AREA_COL - 1] ?? '').trim()).filter(Boolean)
+  )).sort((a, b) => Number(a) - Number(b));
+
+  // DATE CHECK — show the exact PREV DATE value that will be sent to the sheet.
+  // Anything not in yyyy-mm-dd form is a string Google Sheets could re-parse
+  // month-first, which is how 08-09-2025 silently becomes 9 August.
+  const dchk = document.getElementById('sup-datechk');
+  if (dchk && csvRows.length) {
+    const sample = csvRows.slice(0, 3).map(r => {
+      const v = r[8]; // 0-based index 8 = column I = PREV DATE
+      const t = (v instanceof Date) ? 'Date' : typeof v;
+      const iso = /^\d{4}-\d{2}-\d{2}$/.test(String(v));
+      return '<span style="color:' + (iso ? '#16a34a' : '#b91c1c') + ';">' +
+        esc(String(v)) + ' <small>(' + t + (iso ? ', ISO ✓' : ', NOT ISO ✗') + ')</small></span>';
+    }).join(' &nbsp;|&nbsp; ');
+    dchk.innerHTML = '<b>Date being uploaded (col I):</b> ' + sample;
+    dchk.style.display = 'block';
+  }
+
+  if (!detectedAreas.length) {
+    areaEl.textContent = '⚠ No area found in column G — check the file layout';
+    areaEl.style.color = '#b91c1c';
+    btn.disabled = true;
+  } else {
+    areaEl.innerHTML = detectedAreas.map(a => '<span class="area-b">Area ' + esc(a) + '</span>').join(' ');
+    areaEl.style.color = '#111';
+    btn.disabled = false;
+  }
+
+  const previewRows = csvRows.slice(0, 5);
+  const cols = Math.min(8, Math.max.apply(null, previewRows.map(r => r.length)));
+  el.innerHTML = `
+    <div style="font-size:13px;font-weight:700;color:#1F4E79;margin:6px 0;">
+      ${esc(csvName)} — ${csvRows.length} rows detected
+    </div>
+    <div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:9px;">
+      <table style="font-size:12px;min-width:520px;">
+        <thead><tr>${Array.from({length: cols}, (_, i) =>
+          '<th style="padding:6px 8px;">Col ' + String.fromCharCode(65 + i) + '</th>').join('')}</tr></thead>
+        <tbody>${previewRows.map(r =>
+          '<tr>' + Array.from({length: cols}, (_, i) =>
+            '<td style="padding:6px 8px;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis;">' + esc(r[i] ?? '') + '</td>').join('') + '</tr>'
+        ).join('')}</tbody>
+      </table>
+    </div>
+    <div class="hint" style="margin-top:5px;">Showing first ${previewRows.length} rows. Column B should be ACNO, column G the area.</div>`;
+}
+
+async function doCsvUpload() {
+  const errEl = document.getElementById('sup-err');
+  errEl.style.display = 'none';
+  const fileDate = document.getElementById('sup-date').value;
+  const mode = document.getElementById('sup-mode').value;
+  if (!csvRows || !csvRows.length) { errEl.textContent = 'Choose a file first.'; errEl.style.display = 'block'; return; }
+  if (!fileDate) { errEl.textContent = 'Select the file date.'; errEl.style.display = 'block'; return; }
+  if (!detectedAreas.length) { errEl.textContent = 'No area detected in the file (column G).'; errEl.style.display = 'block'; return; }
+
+  const areaLabel = detectedAreas.map(a => 'Area ' + a).join(', ');
+  if (mode === 'replace' &&
+      !confirm('Replace existing rows for ' + areaLabel + ' with file date ' + fileDate + '?\n\n' +
+        'Only old rows of that same area AND MONTH without readings will be deleted.\n' +
+        'Rows already worked by field staff are kept, and an account can only exist once per month.\n' +
+        'Other months are untouched.')) return;
+
+  const btn = document.getElementById('sup-upload');
+  btn.textContent = 'Uploading ' + csvRows.length + ' rows...'; btn.disabled = true;
+  try {
+    let d = await api({ action: 'supervisor_upload_file', fileDate: fileDate, mode: mode, rows: csvRows });
+
+    // New month detected — server asks for confirmation before locking
+    if (d.needsLockConfirm) {
+      if (!confirm('⚠ NEW MONTH DETECTED\n\n' +
+          'This file (' + fileDate + ') is for a newer month than the existing data in ' + areaLabel + '.\n\n' +
+          'Uploading it will archive & lock ' + d.lockCount + ' previous-month row(s) — they move to the "unbilled_archive" sheet and field staff can no longer enter or change readings for those accounts.\n\nContinue and close the previous month?')) {
+        btn.textContent = 'Upload to sheet'; btn.disabled = false;
+        return;
+      }
+      btn.textContent = 'Uploading ' + csvRows.length + ' rows...';
+      d = await api({ action: 'supervisor_upload_file', fileDate: fileDate, mode: mode, rows: csvRows, confirmLock: true });
+    }
+
+    if (d.success) {
+      const bits = [d.added + ' rows added'];
+      if (mode === 'replace') bits.push(d.removed + ' replaced');
+      if (d.kept) bits.push(d.kept + ' kept (already have readings)');
+      if (d.duplicates) bits.push(d.duplicates + ' duplicates skipped');
+      if (d.archived) bits.push(d.archived + ' previous-month rows archived + locked 🔒');
+      if (d.noMeter) bits.push(d.noMeter + ' flagged NO METER 🚫');
+      if (d.skipped) bits.push(d.skipped + ' invalid skipped');
+      flash(areaLabel + ' · ' + d.fileDate + ': ' + bits.join(', ') +
+        (d.formulas === false ? ' · ⚠ columns O–T left empty: no formula row above to copy from' : '') +
+        (d.ms ? ' · server ' + d.ms.total + 'ms (scan ' + d.ms.scan + ', write ' + d.ms.write + ')' : '') + ' ✓', true);
+      csvRows = null; fileRowsAll = null; detectedAreas = [];
+      document.getElementById('sup-file').value = '';
+      renderCsvPreview();
+    } else {
+      errEl.textContent = d.message || 'Upload failed.';
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    if (e.message !== 'auth') { errEl.textContent = 'Could not connect — the file may be too large or the network dropped.'; errEl.style.display = 'block'; }
+  }
+  btn.textContent = 'Upload to sheet'; btn.disabled = !csvRows;
+}
+
+/* ── Entered Readings: list, copy-on-click, lock ── */
+/* ── Entered Readings: list, copy-on-click, lock ── */
+let enteredHeaders = [], enteredRows = [];
+let entEditMode = false;   // when true, NEW READING cells become editable inputs
+
+const ENT_NEWREAD_COL = 13; // M — NEW READING
+const ENT_NEWDATE_COL = 14; // N — NEW DATE
+
+// Toggle inline editing of NEW READING. Re-renders so the cells swap between
+// plain text (copy-on-click) and number inputs. Locked rows stay read-only.
+function toggleEntEdit() {
+  entEditMode = !entEditMode;
+  const btn = document.getElementById('ent-edit-btn');
+  if (btn) {
+    btn.textContent = entEditMode ? '✅ Done editing' : '✏️ Edit reading';
+    btn.style.background = entEditMode ? '#166534' : '#2563eb';
+  }
+  const save = document.getElementById('ent-save-btn');
+  if (save) save.disabled = true; // nothing changed yet
+  if (enteredRows.length) renderEntered();
+}
+
+function onEntReadingEdit() {
+  const save = document.getElementById('ent-save-btn');
+  if (save) save.disabled = false;
+}
+
+// Save NEW READING (col M) and/or NEW DATE (col N) edits. The backend stamps
+// ONE date per call, so rows are grouped by their (possibly edited) date and
+// sent in one call per distinct date. Reading-only edits reuse the row's
+// existing NEW DATE, so nothing gets silently overwritten with today.
+async function saveEnteredReadings() {
+  const dateByRi = {};
+  document.querySelectorAll('.ent-nd-input').forEach(inp => {
+    dateByRi[inp.getAttribute('data-ri')] = String(inp.value ?? '').trim(); // yyyy-mm-dd or ''
+  });
+
+  // Collect changed rows, resolving each to the date it should be saved with.
+  const changed = []; // { row, acno, reading, iso }
+  document.querySelectorAll('.ent-rd-input').forEach(inp => {
+    const ri = inp.getAttribute('data-ri');
+    const r = enteredRows[parseInt(ri)];
+    if (!r) return;
+
+    const val = String(inp.value ?? '').trim();
+    const curVal = String(r.cells[ENT_NEWREAD_COL - 1] ?? '').trim();
+
+    const editedIso = dateByRi[ri] || '';                          // yyyy-mm-dd from picker
+    const curIso = normDate_(r.cells[ENT_NEWDATE_COL - 1] ?? '');  // existing NEW DATE
+    const finalIso = editedIso || curIso;                          // never blank if row had a date
+    const dateChanged = editedIso !== '' && editedIso !== curIso;
+
+    if (val === '') return;                       // backend skips blank readings anyway
+    if (val !== curVal || dateChanged) {
+      changed.push({ row: r.row, acno: r.acno, reading: val, iso: finalIso });
+    }
+  });
+
+  if (!changed.length) { flash('No reading or date changes to save.', false); return; }
+
+  // Group by the date each row should carry (dd-mm-yyyy for the backend).
+  const groups = {};
+  changed.forEach(c => {
+    const key = c.iso || '';   // '' → backend falls back to today (only if the row truly has no date)
+    (groups[key] = groups[key] || []).push(c);
+  });
+
+  const btn = document.getElementById('ent-save-btn');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+  let totalSaved = 0, totalSkipped = 0, failed = false;
+
+  try {
+    for (const iso in groups) {
+      const items = groups[iso].map(c => ({ row: c.row, acno: c.acno, reading: c.reading }));
+      const payload = { action: 'sup_update_reading', items: items };
+      if (iso) payload.date = ddmm(iso);   // dd-mm-yyyy; omitted only if the row had no date at all
+      const d = await api(payload);
+      if (d && d.success) { totalSaved += (d.saved || 0); totalSkipped += (d.skipped || 0); }
+      else { failed = true; flash((d && d.message) || 'Could not save.', false); break; }
+    }
+  } catch(e) {
+    if (e.message !== 'auth') { failed = true; flash('Could not connect.', false); }
+  }
+
+  if (!failed) {
+    flash(totalSaved + ' row(s) updated ✓' + (totalSkipped ? ', ' + totalSkipped + ' skipped' : ''), true);
+    changed.forEach(c => {
+      const r = enteredRows.find(x => x.row === c.row);
+      if (!r) return;
+      r.cells[ENT_NEWREAD_COL - 1] = c.reading;
+      if (c.iso) r.cells[ENT_NEWDATE_COL - 1] = ddmm(c.iso);
+    });
+    preloadCache = null; dashCache = null;
+    if (session.user.role === 'supervisor') startPreload();
+  }
+  renderEntered();
+  btn.textContent = '💾 Save'; btn.disabled = true;
+}
+// The 12 columns to show, by sheet index (1-based), in display order.
+// B ACNO, C CAT, D METER_NO, E CONSADDRESS, H prev reading, I prev date,
+// M new reading, N new date, O C.USAGE, S CUTOFF DATE, T CUTOFF READING.
+const ENTERED_COLS = [
+  { i: 2,  label: 'ACNO' },
+  { i: 3,  label: 'CAT' },
+  { i: 4,  label: 'METER NO' },
+  { i: 5,  label: 'CONS ADDRESS' },
+  { i: 8,  label: 'PREV READING' },
+  { i: 9,  label: 'PREV DATE' },
+  { i: 13, label: 'NEW READING' },
+  { i: 14, label: 'NEW DATE' },
+  { i: 15, label: 'USAGE' },
+  { i: 19, label: 'CUTOFF DATE' },
+  { i: 20, label: 'CUTOFF READING' }
+];
+
+// Populate the area dropdown when the tab opens — WITHOUT blocking on data.
+// Also warm up the backend and preload all the supervisor's areas in the
+// background so pressing Load is instant.
+let enteredTabReady = false;
+let preloadCache = null;      // { rows, headers, at } — all assigned areas, any date
+let preloadPromise = null;    // in-flight preload, so Load can await it
+
+function assignedAreaList() {
+  if (session.user.role === 'supervisor') {
+    return (session.user.areas || []).slice().sort((a, b) => Number(a) - Number(b));
+  }
+  const all = [];
+  for (let i = 1; i <= 24; i++) all.push(String(i));
+  return all;
+}
+
+function initEnteredTab() {
+  const areaSel = document.getElementById('ent-area');
+  let opts = '<option value="">Select area…</option>';
+  assignedAreaList().forEach(a => { opts += '<option value="' + esc(a) + '">Area ' + esc(a) + '</option>'; });
+  areaSel.innerHTML = opts;
+
+  if (!enteredTabReady) {
+    enteredRows = [];
+    document.getElementById('entered-body').innerHTML =
+      '<div class="loading" style="color:#9ca3af;">Select an area to view its accounts instantly.</div>';
+    document.getElementById('lock-btn').disabled = true;
+    enteredTabReady = true;
+  }
+
+  // 1) Warm the Apps Script container (kills cold-start on the real request)
+  fetch(API + '?action=ping').catch(() => {});
+
+  // 2) Preload all assigned areas in the background (admins: skip — 24 areas is too much)
+  if (session.user.role === 'supervisor') startPreload();
+}
+
+function startPreload() {
+  const areas = assignedAreaList().join(',');
+  if (!areas) return;
+  preloadPromise = api({ action: 'supervisor_entered', areas: areas })
+    .then(d => {
+      if (d && d.success) {
+        preloadCache = { rows: d.rows || [], headers: d.headers || [], at: Date.now() };
+        // If the user is waiting on the prompt with an area chosen, show it now
+        const areaSel = document.getElementById('ent-area');
+        if (areaSel.value && !enteredRows.length) renderFromCacheOrSkip();
+      }
+      return d;
+    })
+    .catch(() => {});
+}
+
+function renderFromCacheOrSkip() {
+  // Only auto-render if the user has actually picked an area
+  if (!document.getElementById('ent-area').value) return;
+  applyFromCache();
+}
+
+// Filter the preloaded cache to the chosen area (+ date) and render — instant.
+// Auto-render the selected area from the preload cache (instant, no fetch).
+// Falls back to a live load only if the preload hasn't arrived yet.
+// ── Poll for new readings in the selected area; blink Refresh if found ──
+let entPollTimer = null;
+let entKnownCount = null; // taken-count last seen for the selected area
+
+function entStartPolling() {
+  entStopPolling();
+  entPollTimer = setInterval(entPollCheck, 30000); // every 30s
+}
+function entStopPolling() {
+  if (entPollTimer) { clearInterval(entPollTimer); entPollTimer = null; }
+}
+function entBlinkRefresh(on) {
+  const b = document.getElementById('ent-refresh-btn');
+  if (!b) return;
+  b.classList.toggle('blink', !!on);
+  b.textContent = on ? '🔄 New readings!' : '🔄 Refresh';
+}
+function entCountFor(rows, area) {
+  return rows.filter(r => String(r.area ?? r.cells[ENT_AREA_COL - 1] ?? '').trim() === area).length;
+}
+async function entPollCheck() {
+  // Only poll while the tab is visible and an area is chosen
+  if (document.getElementById('pane-entered').style.display === 'none') return;
+  const area = document.getElementById('ent-area').value;
+  if (!area) return;
+  const areas = assignedAreaList().join(',');
+  if (!areas) return;
+  try {
+    const d = await api({ action: 'supervisor_entered', areas: areas });
+    if (!d || !d.success) return;
+    const fresh = d.rows || [];
+    const count = entCountFor(fresh, area);
+    if (entKnownCount != null && count > entKnownCount) {
+      entBlinkRefresh(true); // more taken readings than before → alert
+    }
+    entKnownCount = count;
+    // stash so Refresh uses this fresh data without another round-trip
+    preloadCache = { rows: fresh, headers: d.headers || (preloadCache && preloadCache.headers) || [], at: Date.now() };
+  } catch(e) {}
+}
+
+// Auto-render the selected area from the preload cache (instant, no fetch).
+function onEntAreaChange() {
+  const area = document.getElementById('ent-area').value;
+  const body = document.getElementById('entered-body');
+  entBlinkRefresh(false); // switching area clears any prior alert
+  const esb = document.getElementById('ent-save-btn');
+  if (esb) esb.disabled = true; // unsaved edits don't carry across areas
+  if (!area) {
+    enteredRows = [];
+    body.className = 'loading'; body.style.color = '#9ca3af';
+    body.textContent = 'Select an area to view.';
+    document.getElementById('lock-btn').disabled = true;
+    entKnownCount = null;
+    entStopPolling();
+    return;
+  }
+  const setBaselineAndPoll = () => {
+    entKnownCount = preloadCache ? entCountFor(preloadCache.rows, area) : null;
+    entStartPolling();
+  };
+  if (preloadCache) { applyFromCache(); setBaselineAndPoll(); return; }
+  // Preload not ready yet — wait for it, then show
+  body.className = 'loading'; body.style.color = '#9ca3af';
+  body.textContent = 'Loading Area ' + area + '…';
+  if (preloadPromise) {
+    preloadPromise.then(() => { if (preloadCache) applyFromCache(); else loadEntered(); setBaselineAndPoll(); });
+  } else {
+    loadEntered(); setBaselineAndPoll();
+  }
+}
+
+function applyFromCache() {
+  const area = document.getElementById('ent-area').value;
+  const date = document.getElementById('ent-date').value; // '' = any
+  if (!preloadCache) return false;
+  enteredHeaders = preloadCache.headers;
+  enteredRows = preloadCache.rows.filter(r =>
+    String(r.area ?? r.cells[ENT_AREA_COL - 1] ?? '').trim() === area &&
+    (!date || normDate_(r.cells[ENT_RDATE_COL - 1]) === date)
+  );
+  renderEntered();
+  return true;
+}
+
+async function loadEntered() {
+  const area = document.getElementById('ent-area').value;
+  const date = document.getElementById('ent-date').value; // '' = any date
+  const body = document.getElementById('entered-body');
+  if (!area) { body.className = 'loading'; body.style.color = '#b91c1c'; body.textContent = 'Please select an area first.'; return; }
+  document.getElementById('lock-btn').disabled = true;
+
+  // Fast path: preload already finished → filter it client-side, no wait
+  if (preloadCache) { applyFromCache(); return; }
+
+  // Preload still running → wait for it rather than firing a second scan
+  body.className = 'loading'; body.style.color = '#9ca3af';
+  body.textContent = 'Loading Area ' + area + (date ? ' · ' + date : '') + '…';
+  if (preloadPromise) {
+    try { await preloadPromise; } catch(e) {}
+    if (preloadCache) { applyFromCache(); return; }
+  }
+
+  // No preload (e.g. admin, or preload failed) → direct fetch for this area
+  try {
+    const d = await api({ action: 'supervisor_entered', area: area, date: date });
+    if (!d.success) { body.style.color = '#b91c1c'; body.textContent = d.message || 'Could not load.'; return; }
+    enteredHeaders = d.headers || [];
+    enteredRows = d.rows || [];
+    renderEntered();
+  } catch(e) {
+    if (e.message !== 'auth') { body.style.color = '#b91c1c'; body.textContent = 'Could not connect.'; }
+  }
+}
+
+const ENT_AREA_COL = 7;  // G
+const ENT_RDATE_COL = 12; // L (R_DATE)
+
+// Normalize a date to yyyy-mm-dd for comparison. Handles the sheet's
+// dd/MM/yyyy or dd-MM-yyyy display and the picker's native yyyy-mm-dd.
+function normDate_(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return '';
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);            // yyyy-mm-dd
+  if (m) return m[1] + '-' + ('0'+m[2]).slice(-2) + '-' + ('0'+m[3]).slice(-2);
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);    // dd/MM/yyyy or dd-MM-yyyy
+  if (m) {
+    let y = m[3]; if (y.length === 2) y = '20' + y;
+    return y + '-' + ('0'+m[2]).slice(-2) + '-' + ('0'+m[1]).slice(-2);
+  }
+  return s;
+}
+
+function refreshEntered() {
+  entBlinkRefresh(false); // clear the alert
+  preloadCache = null;
+  preloadPromise = null;
+  const area = document.getElementById('ent-area').value;
+  if (session.user.role === 'supervisor') startPreload();
+  if (area) {
+    loadEntered();
+    // reset baseline once fresh data lands
+    if (preloadPromise) preloadPromise.then(() => { entKnownCount = preloadCache ? entCountFor(preloadCache.rows, area) : null; });
+  } else {
+    const body = document.getElementById('entered-body');
+    body.className = 'loading'; body.style.color = '#9ca3af';
+    body.textContent = 'Refreshing in the background… select an area.';
+  }
+}
+
+function clearEnteredFilters() {
+  document.getElementById('ent-area').value = '';
+  document.getElementById('ent-date').value = '';
+  enteredRows = [];
+  const body = document.getElementById('entered-body');
+  body.className = 'loading'; body.style.color = '#9ca3af';
+  body.textContent = 'Select an area and press Load.';
+  document.getElementById('lock-btn').disabled = true;
+}
+
+function renderEntered() {
+  const body = document.getElementById('entered-body');
+  body.className = ''; body.style.color = '';
+
+
+  const shown = enteredRows.slice().sort((a, b) => (a.locked ? 1 : 0) - (b.locked ? 1 : 0)); // pending first, locked at bottom
+
+  if (!enteredRows.length) {
+    body.innerHTML = '<div class="loading">No entered readings found for this area/date.</div>';
+    document.getElementById('lock-btn').disabled = true;
+    return;
+  }
+  const head = '<th style="width:26px;text-align:center;padding:5px 3px;"><input type="checkbox" id="ent-all" onchange="toggleAllEntered(this)"></th>' +
+    '<th style="text-align:center;padding:5px 3px;">Status</th>' +
+    ENTERED_COLS.map(c => '<th style="white-space:nowrap;padding:5px 4px;">' + esc(c.label) + '</th>').join('');
+  const rows = shown.map(r => {
+    const ri = enteredRows.indexOf(r);
+    const cells = ENTERED_COLS.map(c => {
+      const v = r.cells[c.i - 1];
+      // In edit-mode, NEW READING (col M / i=13) becomes a number input and
+      // NEW DATE (col N / i=14) becomes a date picker. Never for locked rows.
+      if (entEditMode && !r.locked && (c.i === 13 || c.i === 14)) {
+        if (c.i === 13) {
+          return '<td style="padding:3px 4px;white-space:nowrap;">' +
+            '<input type="number" class="ent-rd-input" data-ri="' + ri + '" ' +
+            'value="' + esc(v ?? '') + '" oninput="onEntReadingEdit()" ' +
+            'style="width:96px;padding:5px 7px;border:1.5px solid #2563eb;border-radius:6px;font-size:12px;font-family:inherit;outline:none;"></td>';
+        }
+        // NEW DATE — value must be yyyy-mm-dd for the native picker
+        return '<td style="padding:3px 4px;white-space:nowrap;">' +
+          '<input type="date" class="ent-nd-input" data-ri="' + ri + '" ' +
+          'value="' + esc(normDate_(v)) + '" oninput="onEntReadingEdit()" ' +
+          'style="padding:5px 7px;border:1.5px solid #2563eb;border-radius:6px;font-size:12px;font-family:inherit;outline:none;"></td>';
+      }
+      const wrap = (c.i === 5)
+        ? 'white-space:normal;word-break:break-word;min-width:120px;'
+        : 'white-space:nowrap;';
+      return '<td class="copycell" title="Click to copy" onclick="copyCell(this)" data-v="' + esc(v ?? '') + '"' +
+        ' style="padding:5px 4px;' + wrap + 'cursor:pointer;">' +
+        esc(v ?? '') + '</td>';
+    }).join('');
+    const cb = r.locked
+      ? '<input type="checkbox" disabled title="Already locked">'
+      : '<input type="checkbox" class="ent-cb" onchange="onEnteredTick(this)">';
+    const statusCell = r.locked
+      ? '<td style="text-align:center;padding:5px 3px;"><span class="role-b" style="background:#dcfce7;color:#166534;">🔒</span></td>'
+      : (r.changeover
+        ? '<td style="text-align:center;padding:5px 3px;"><span class="role-b" style="background:#ede9fe;color:#5b21b6;" title="Changeover — meter swapped, no reading">🔁</span></td>'
+        : (r.attended
+          ? '<td style="text-align:center;padding:5px 3px;"><span class="role-b" style="background:#ccfbf1;color:#0f766e;" title="Attended — enter the reading to complete it">✔️</span></td>'
+          : '<td style="text-align:center;padding:5px 3px;"><span class="role-b" style="background:#fef3c7;color:#92400e;">•</span></td>'));
+// ATTENDED → purple (visited, reading still needed); CHANGEOVER → pale blue
+    // (meter swap, no reading). Locked wins over both.
+    const isAttended = r.attended || String(r.tag || '').toUpperCase() === 'ATTENDED';
+    const isChangeover = r.changeover || String(r.tag || '').toUpperCase() === 'CHANGEOVER';
+    let rowStyle = '';
+    if (!r.locked && isAttended) rowStyle = ' style="background:#f5f3ff;"';       // purple
+    else if (!r.locked && isChangeover) rowStyle = ' style="background:#e0f2fe;"'; // pale blue
+    return '<tr class="' + (r.locked ? 'locked-row' : '') + '" data-ri="' + ri + '"' + rowStyle + '>' +
+      '<td style="text-align:center;padding:5px 3px;">' + cb + '</td>' + statusCell + cells + '</tr>';
+  }).join('');
+  body.innerHTML =
+    '<div style="border:1px solid #e5e7eb;border-radius:9px;overflow:hidden;">' +
+    '<table style="font-size:11.5px;width:100%;table-layout:auto;">' +
+    '<thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="hint" style="margin-top:6px;">' + shown.length +
+    ' of ' + enteredRows.length + ' account(s) shown — 🔒 locked (green), • pending. Click a cell to copy.</div>';
+  updateLockBtn();
+}
+
+function copyCell(td) {
+  const v = td.getAttribute('data-v') || '';
+  const done = () => {
+    // Inline feedback only — no top banner (it shifts the table). Briefly
+    // highlight the cell so the user sees the copy landed.
+    const old = td.style.background;
+    td.style.background = '#bbf7d0';
+    setTimeout(() => { td.style.background = old; }, 400);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(v).then(done).catch(() => fallbackCopy(v, done));
+  } else {
+    fallbackCopy(v, done);
+  }
+}
+
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); done(); } catch(e) { flash('Copy failed — select manually', false); }
+  document.body.removeChild(ta);
+}
+
+function toggleAllEntered(cb) {
+  document.querySelectorAll('.ent-cb').forEach(x => {
+    x.checked = cb.checked;
+    const tr = x.closest('tr');
+    if (tr) tr.classList.toggle('ticked-row', cb.checked);
+  });
+  updateLockBtn();
+}
+
+function updateLockBtn() {
+  const anyChecked = Array.from(document.querySelectorAll('.ent-cb')).some(x => x.checked);
+  document.getElementById('lock-btn').disabled = !anyChecked;
+}
+
+// Highlight a row yellow while its checkbox is ticked (locked rows stay green)
+function onEnteredTick(cb) {
+  const tr = cb.closest('tr');
+  if (tr) {
+    tr.classList.toggle('ticked-row', cb.checked);
+    if (cb.checked) {
+      const r = enteredRows[parseInt(tr.getAttribute('data-ri'))];
+      pjLoadFromRow(r); // fill the calculator + show this row's meter photo
+    } else {
+      const box = document.getElementById('pj-photo');
+      if (box) box.innerHTML = '<span style="color:#9ca3af;">Tick a row to view its photo.</span>';
+      const rb = document.getElementById('pj-remarks');
+      if (rb) rb.innerHTML = 'Tick a row to see its remarks.';
+    }
+  }
+  updateLockBtn();
+}
+
+async function lockSelected() {
+  const items = [];
+  document.querySelectorAll('#entered-body tbody tr').forEach(tr => {
+    const cb = tr.querySelector('.ent-cb');
+    if (cb && cb.checked) {
+      const r = enteredRows[parseInt(tr.getAttribute('data-ri'))];
+      if (r) items.push({ row: r.row, acno: r.acno });
+    }
+  });
+  if (!items.length) return;
+  if (!confirm('Mark ' + items.length + ' account(s) as done and entered into billing?\n\n' +
+    'They will be LOCKED — field staff can no longer change them, and they will be archived at month close.')) return;
+
+  const btn = document.getElementById('lock-btn');
+  btn.textContent = 'Locking...'; btn.disabled = true;
+  try {
+    const d = await api({ action: 'supervisor_lock_rows', items: items });
+    if (d.success) {
+      flash(d.locked + ' account(s) locked → billing' + (d.mismatch ? ', ' + d.mismatch + ' skipped (sheet changed — refresh)' : '') + ' ✓', true);
+      preloadCache = null;                                    // stale after locking
+      if (session.user.role === 'supervisor') startPreload(); // rebuild in background
+      loadEntered();
+      await exportAndPurgePhotos(items);                      // download photos, then clear Drive
+    } else {
+      flash(d.message || 'Could not lock.', false);
+    }
+  } catch(e) {
+    if (e.message !== 'auth') flash('Could not connect.', false);
+  }
+  btn.innerHTML = '🔒 Mark selected done → billing';
+}
+
+// Bundle the locked accounts' photos into a ZIP, download it, and only then
+// permanently delete them from Drive. Deletion is irreversible, so it never
+// happens until the user confirms the file actually arrived.
+async function exportAndPurgePhotos(items) {
+  if (!confirm('Download the meter photos for these ' + items.length + ' account(s) as a ZIP?\n\n' +
+    'After you confirm the download, the photos will be PERMANENTLY deleted from Google Drive to free up space.')) return;
+
+  const btn = document.getElementById('lock-btn');
+  btn.textContent = 'Zipping photos…'; btn.disabled = true;
+  let d;
+  try {
+    d = await api({ action: 'export_photos', items: items });
+  } catch(e) {
+    if (e.message !== 'auth') flash('Could not build the ZIP. Photos were NOT deleted.', false);
+    return;
+  }
+  if (!d || !d.success) {
+    flash((d && d.message) || 'Could not build the ZIP. Photos were NOT deleted.', false);
+    return;
+  }
+
+  // Trigger the download
+  const a = document.createElement('a');
+  a.href = (d.zipUrl && d.zipUrl.charAt(0) === '/') ? API.replace(/\/api\/legacy$/, '') + d.zipUrl : d.zipUrl;
+  a.download = d.zipName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  flash('Downloading ' + d.zipName + ' (' + d.count + ' photo' + (d.count === 1 ? '' : 's') + ')…', true);
+
+  // Only delete once the user confirms the file is really on their PC.
+  const ok = confirm('ZIP: ' + d.zipName + '\n' + d.count + ' photo(s)' +
+    (d.missing ? ', ' + d.missing + ' account(s) had no photo' : '') + '\n\n' +
+    'Has the ZIP finished downloading and opened correctly?\n\n' +
+    'Click OK to PERMANENTLY DELETE these photos from Google Drive.\n' +
+    'Click Cancel to keep them (you can export again later).');
+  if (!ok) { flash('Photos kept in Drive — nothing deleted.', true); return; }
+
+  btn.textContent = 'Clearing Drive…';
+  try {
+    const r = await api({ action: 'delete_photos', fileIds: d.fileIds, rows: d.rows, zipId: d.zipId });
+    if (r && r.success) {
+      flash(r.deleted + ' photo(s) permanently deleted from Drive ✓' + (r.failed ? ', ' + r.failed + ' failed' : ''), true);
+      preloadCache = null;
+      if (session.user.role === 'supervisor') startPreload();
+      loadEntered();
+    } else {
+      flash((r && r.message) || 'Could not delete the photos from Drive.', false);
+    }
+  } catch(e) {
+    if (e.message !== 'auth') flash('Could not connect — photos are still in Drive.', false);
+  }
+}
+
+/* ── Projection calculator ── */
+const PJ_PREV_COL = 8;    // H  PREV READING
+const PJ_PDATE_COL = 9;   // I  PREV DATE
+const PJ_CUR_COL  = 13;   // M  NEW READING
+const PJ_DAYS_COL = 17;   // Q  NEW DAYS (reading days)
+const PJ_NDATE_COL = 14;  // N  NEW DATE — the day the meter was actually read
+const PJ_REMARKS_COL = 21; // U  REMARKS
+
+let pjPrevDate = ''; // yyyy-mm-dd of the ticked row's previous date
+let pjNewDate  = ''; // yyyy-mm-dd of the ticked row's new date (the ceiling)
+
+function pjNum(id) {
+  const v = parseFloat(document.getElementById(id).value);
+  return isNaN(v) ? null : v;
+}
+
+function pjCalc() {
+  const prev = pjNum('pj-prev'), cur = pjNum('pj-cur'), days = pjNum('pj-days');
+  let target = pjNum('pj-target');
+  const dailyEl = document.getElementById('pj-daily'), resEl = document.getElementById('pj-result'),
+        dateEl = document.getElementById('pj-date'), noteEl = document.getElementById('pj-note');
+  const clearNote = () => { if (noteEl) { noteEl.style.display = 'none'; noteEl.textContent = ''; } };
+
+  if (prev === null || cur === null || days === null || days === 0) {
+    dailyEl.textContent = '—'; resEl.textContent = '—'; resEl.dataset.v = ''; dateEl.textContent = '—';
+    clearNote();
+    return;
+  }
+  const daily = (cur - prev) / days;
+  dailyEl.textContent = (Math.round(daily * 1000) / 1000);
+  if (target === null) { resEl.textContent = '—'; resEl.dataset.v = ''; dateEl.textContent = '—'; clearNote(); return; }
+
+  // The projection cannot run past NEW DATE. Beyond that day the meter was
+  // actually read, so there is nothing left to project — extrapolating further
+  // would invent consumption that the real reading already accounts for.
+  let capped = false;
+  if (pjPrevDate && pjNewDate) {
+    const p = new Date(pjPrevDate + 'T00:00:00'), n = new Date(pjNewDate + 'T00:00:00');
+    if (!isNaN(p) && !isNaN(n)) {
+      const maxDays = Math.round((n - p) / 86400000);
+      if (maxDays >= 0 && target > maxDays) {
+        target = maxDays;
+        capped = true;
+        const ti = document.getElementById('pj-target');
+        if (ti) ti.value = String(maxDays);   // show the user what was actually used
+      }
+    }
+  }
+
+  const projected = Math.round(daily * target + prev);
+  resEl.textContent = projected;
+  resEl.dataset.v = String(projected);
+
+  // Projected date = previous date + target days (now guaranteed ≤ new date)
+  if (pjPrevDate) {
+    const d = new Date(pjPrevDate + 'T00:00:00');
+    if (!isNaN(d)) {
+      d.setDate(d.getDate() + Math.round(target));
+      const dd = ('0'+d.getDate()).slice(-2), mm = ('0'+(d.getMonth()+1)).slice(-2), yy = d.getFullYear();
+      dateEl.textContent = dd + '-' + mm + '-' + yy;
+    } else dateEl.textContent = '—';
+  } else dateEl.textContent = '—';
+
+  if (noteEl) {
+    if (capped) {
+      noteEl.style.display = 'block';
+      noteEl.textContent = '⚠ Capped at ' + target + ' days — the meter was read on ' + ddmm(pjNewDate) +
+        ', so the projection cannot go past that date.';
+    } else clearNote();
+  }
+}
+
+// Fill the calculator from a ticked row and compute
+function pjLoadFromRow(r) {
+  if (!r) return;
+  const g = (i) => String(r.cells[i - 1] ?? '').replace(/,/g, '').trim();
+  document.getElementById('pj-prev').value = g(PJ_PREV_COL);
+  document.getElementById('pj-cur').value  = g(PJ_CUR_COL);
+  document.getElementById('pj-days').value = g(PJ_DAYS_COL);
+  pjPrevDate = normDate_(g(PJ_PDATE_COL)); // for the projected-date calc
+  pjNewDate  = normDate_(g(PJ_NDATE_COL)); // projection can never go past this
+  pjCalc();
+  pjShowPhoto(r);
+  pjShowRemarks(r);
+}
+
+// Show the ticked account's remarks (column U)
+function pjShowRemarks(r) {
+  const box = document.getElementById('pj-remarks');
+  if (!box) return;
+  const txt = r ? String(r.cells[PJ_REMARKS_COL - 1] ?? '').trim() : '';
+  if (!txt) {
+    box.innerHTML = '<span style="color:#9ca3af;font-style:italic;">No remarks for ACNO ' + esc(r ? r.acno : '') + '.</span>';
+  } else {
+    box.innerHTML = '<b>' + esc(txt) + '</b>';
+  }
+}
+
+// Show the meter photo for the ticked row. Drive share links need converting
+// to a direct-image URL before they'll render in an <img>.
+async function pjShowPhoto(r) {
+  const box = document.getElementById('pj-photo');
+  if (!box) return;
+  if (!r) { box.innerHTML = '<span style="color:#9ca3af;">Tick a row to view its photo.</span>'; return; }
+  if (!('photo' in r) || !String(r.photo || '')) {
+    box.innerHTML = '<span style="color:#9ca3af;">No photo saved for ACNO ' + esc(r.acno) + '.</span>';
+    return;
+  }
+
+  // Photos are PRIVATE in Drive. They are fetched through the authenticated API,
+  // which checks this user is allowed to see this account — a public link would
+  // let anyone with the URL view a customer's premises without logging in.
+  box.innerHTML = '<span style="color:#9ca3af;">Loading photo…</span>';
+  try {
+    const d = await api({ action: 'get_photo', row: r.row, acno: r.acno });
+    if (!d || !d.success) {
+      box.innerHTML = '<span style="color:#b45309;">' + esc((d && d.message) || 'Photo unavailable.') + '</span>';
+      return;
+    }
+    const src = 'data:' + (d.mime || 'image/jpeg') + ';base64,' + d.data;
+    box.innerHTML =
+      '<img src="' + src + '" alt="Meter photo" title="Click to zoom / adjust" ' +
+        'style="width:100%;border-radius:8px;border:1px solid var(--border);display:block;cursor:zoom-in;">' +
+      '<div class="hint" style="margin-top:4px;">ACNO ' + esc(r.acno) + ' — click to zoom / adjust.</div>';
+    const img = box.querySelector('img');
+    if (img) img.onclick = () => pvOpen(src, r.acno);
+  } catch (e) {
+    if (e.message !== 'auth') box.innerHTML = '<span style="color:#b45309;">Could not load the photo.</span>';
+  }
+}
+
+// Extract the Drive file id from a share/view URL
+function driveFileId_(url) {
+  let m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/);      // .../file/d/<id>/view
+  if (m) return m[1];
+  m = String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);        // ...?id=<id>
+  return m ? m[1] : '';
+}
+
+function pjCopyResult() {
+  const v = document.getElementById('pj-result').dataset.v || '';
+  if (!v) return;
+  const done = () => flash('Copied projected reading: ' + v, true);
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done).catch(()=>{});
+  else done();
+}
+
+/* ── No-Meter tab ── */
+let nmCurrent = null; // last looked-up account
+
+function nmShowAreas() {
+  const el = document.getElementById('nm-areas-hint');
+  if (!el) return;
+  if (session.user.role === 'supervisor') {
+    const areas = (session.user.areas || []);
+    el.style.display = 'block';
+    el.innerHTML = areas.length
+      ? 'You can mark accounts in your areas only: <b>' + areas.map(a => 'Area ' + esc(a)).join(', ') + '</b>.'
+      : 'No areas are assigned to you — contact an admin.';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+async function nmLookup() {
+  const acno = document.getElementById('nm-acno').value.trim();
+  const box = document.getElementById('nm-result');
+  nmCurrent = null;
+  if (!acno) { box.innerHTML = '<div class="msg bad" style="position:static;transform:none;box-shadow:none;">Enter an account number.</div>'; return; }
+  box.innerHTML = '<div class="loading" style="color:#9ca3af;">Looking up…</div>';
+  try {
+    const d = await api({ action: 'nometer_lookup', acno: acno });
+    if (!d.success) { box.innerHTML = '<div class="hint" style="color:#b91c1c;">' + esc(d.message || 'Lookup failed.') + '</div>'; return; }
+    if (!d.found) { box.innerHTML = '<div class="hint" style="color:#b91c1c;">' + esc(d.message || 'Not found.') + '</div>'; return; }
+    nmCurrent = d;
+    const dis = d.already ? ' disabled' : '';
+    box.innerHTML =
+      '<div style="background:#f9fafb;border-radius:10px;padding:14px;">' +
+        '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;margin-bottom:12px;">' +
+          '<span style="color:#6b7280;">ACNO</span><b>' + esc(d.acno) + '</b>' +
+          '<span style="color:#6b7280;">Area</span><span>' + esc(d.area || '—') + '</span>' +
+          '<span style="color:#6b7280;">Meter</span><span>' + esc(d.meter || '—') + '</span>' +
+          '<span style="color:#6b7280;">Address</span><span>' + esc(d.address || '—') + '</span>' +
+        '</div>' +
+        (d.already
+          ? '<div class="hint" style="color:#166534;">✓ Already in the no-meters list.</div>'
+          : '<label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:12px;">' +
+              '<input type="checkbox" id="nm-flag"> This account has NO METER</label>' +
+            '<button class="bigbtn" style="max-width:200px;" onclick="nmSave()">Save to no-meter list</button>') +
+      '</div>';
+  } catch(e) {
+    if (e.message !== 'auth') box.innerHTML = '<div class="hint" style="color:#b91c1c;">Could not connect.</div>';
+  }
+}
+
+async function nmSave() {
+  if (!nmCurrent) return;
+  const flag = document.getElementById('nm-flag');
+  if (!flag || !flag.checked) { flash('Tick "This account has NO METER" first.', false); return; }
+  try {
+    const d = await api({ action: 'nometer_save', acno: nmCurrent.acno, address: nmCurrent.address, meter: nmCurrent.meter, area: nmCurrent.area });
+    if (d.success) {
+      flash('ACNO ' + nmCurrent.acno + ' marked NO METER' + (d.flagged ? ' — ' + d.flagged + ' row(s) updated in sheet' : '') + ' ✓', true);
+      document.getElementById('nm-acno').value = '';
+      document.getElementById('nm-result').innerHTML = '';
+      nmCurrent = null;
+      nmListCache = null; // refresh list after adding
+      nmLoadList(true);
+    } else {
+      flash(d.message || 'Could not save.', false);
+    }
+  } catch(e) {
+    if (e.message !== 'auth') flash('Could not connect.', false);
+  }
+}
+
+async function nmLoadList(force) {
+  const box = document.getElementById('nm-list');
+  if (!box) return;
+  const render = (rows) => {
+    box.className = '';
+    if (!rows.length) { box.innerHTML = '<div class="hint">No accounts flagged yet.</div>'; return; }
+    box.innerHTML =
+      '<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">' + rows.length + ' account(s)</div>' +
+      '<div style="max-height:420px;overflow-y:auto;">' +
+      rows.slice().reverse().map(r =>
+        '<div style="border-bottom:1px solid #f3f4f6;padding:7px 0;">' +
+          '<div style="font-weight:700;color:#1F4E79;font-size:13px;">' + esc(r.acno) +
+            '<span class="area-b" style="margin-left:6px;">Area ' + esc(r.area || '—') + '</span></div>' +
+          '<div style="font-size:12px;color:#6b7280;">' + esc(r.address || '—') + '</div>' +
+        '</div>'
+      ).join('') + '</div>';
+  };
+  // Instant from cache
+  if (!force && nmListCache) { render(nmListCache); return; }
+  box.className = 'loading'; box.style.color = '#9ca3af'; box.textContent = 'Loading…';
+  try {
+    const d = await api({ action: 'nometer_list' });
+    if (!d.success) { box.textContent = d.message || 'Could not load.'; return; }
+    nmListCache = d.rows || [];
+    render(nmListCache);
+  } catch(e) {
+    if (e.message !== 'auth') box.textContent = 'Could not connect.';
+  }
+}
+
+/* ── Unbilled New tab ── */
+const NEW_COLS = ENTERED_COLS; // same visible columns as Unbilled Taken
+const COL_REMARKS_IDX = 21;    // U — Remarks
+let newRows = [];
+
+async function loadUnbilledNew(force) {
+  const body = document.getElementById('new-body');
+  // Use preloaded cache instantly if available (unless a forced refresh)
+  if (!force && newCache) {
+    newRows = newCache;
+    renderUnbilledNew();
+    return;
+  }
+  body.className = 'loading'; body.style.color = '#9ca3af'; body.textContent = 'Loading…';
+  document.getElementById('rmk-save-btn').disabled = true;
+  try {
+    const d = await api({ action: 'unbilled_new' });
+    if (!d.success) { body.style.color = '#b91c1c'; body.textContent = d.message || 'Could not load.'; return; }
+    newRows = d.rows || [];
+    newCache = newRows;
+    renderUnbilledNew();
+  } catch(e) {
+    if (e.message !== 'auth') { body.style.color = '#b91c1c'; body.textContent = 'Could not connect.'; }
+  }
+}
+
+const NEW_AREA_COL = 7; // G
+const NEW_RDATE_COL = 12; // L (R_DATE)
+
+// Fill the R_DATE dropdown from the distinct R_DATE (col L) values present in
+// the untaken rows. Option values are yyyy-mm-dd (for comparison); labels are
+// shown dd-MM-yyyy so the browser locale can't misread them.
+function populateNewRdateFilter() {
+  const sel = document.getElementById('new-rdate-filter');
+  if (!sel) return;
+  const prev = sel.value;
+  const dates = Array.from(new Set(
+    newRows.map(r => normDate_(r.cells[NEW_RDATE_COL - 1])).filter(Boolean)
+  )).sort().reverse(); // newest first
+  sel.innerHTML = '<option value="all">All dates</option>' +
+    dates.map(d => '<option value="' + esc(d) + '">' + esc(ddmm(d)) + '</option>').join('');
+  if (prev && (prev === 'all' || dates.indexOf(prev) !== -1)) sel.value = prev;
+}
+
+function populateNewAreaFilter() {
+  const sel = document.getElementById('new-area-filter');
+  if (!sel) return;
+  const prev = sel.value;
+  const areas = Array.from(new Set(newRows.map(r => String(r.area ?? r.cells[NEW_AREA_COL - 1] ?? '').trim()).filter(Boolean)))
+    .sort((a, b) => Number(a) - Number(b));
+  sel.innerHTML = '<option value="all">All areas</option>' +
+    areas.map(a => '<option value="' + esc(a) + '">Area ' + esc(a) + '</option>').join('');
+  if (prev && (prev === 'all' || areas.indexOf(prev) !== -1)) sel.value = prev;
+}
+
+function renderUnbilledNew() {
+  const body = document.getElementById('new-body');
+  body.className = ''; body.style.color = '';
+  // Admins can look but not touch: hide the edit/tag controls entirely.
+  const isAdminView = (session.user.role === 'admin');
+  ['chg-btn', 'att-btn', 'rmk-save-btn', 'rd-save-btn'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.style.display = isAdminView ? 'none' : '';
+  });
+  const rsb = document.getElementById('rd-save-btn');
+  if (rsb) rsb.disabled = true;   // nothing typed yet on a fresh render
+  const rdw = document.getElementById('rd-date-wrap');
+  if (rdw) rdw.style.display = isAdminView ? 'none' : 'inline-flex';
+  const rdd = document.getElementById('rd-date');
+  if (rdd && !rdd.value) rdd.value = new Date().toISOString().split('T')[0];
+  showRdDateLbl();
+  const note = document.getElementById('new-note');
+  if (note) {
+    note.style.display = isAdminView ? 'block' : 'none';
+    note.innerHTML = '👁️ View only — remarks and changeover tagging are done by the area supervisor.';
+  }
+  populateNewAreaFilter();
+  populateNewRdateFilter();
+  const fArea = document.getElementById('new-area-filter').value;
+  const fRdate = document.getElementById('new-rdate-filter').value;
+
+  if (!newRows.length) {
+    body.innerHTML = '<div class="loading" style="color:#9ca3af;">No untaken accounts. 🎉</div>';
+    document.getElementById('rmk-save-btn').disabled = true;
+    return;
+  }
+  // Keep the TRUE index into newRows in data-ri so remarks save maps correctly
+const shown = newRows
+    .map((r, ri) => ({ r, ri }))
+    .filter(x => (fArea === 'all' || String(x.r.area ?? x.r.cells[NEW_AREA_COL - 1] ?? '').trim() === fArea)
+              && (fRdate === 'all' || normDate_(x.r.cells[NEW_RDATE_COL - 1]) === fRdate));
+
+  const readOnlyNew = (session.user.role === 'admin');   // admins view only
+  const head = (readOnlyNew ? '' : '<th style="width:26px;text-align:center;padding:5px 3px;"><input type="checkbox" onchange="toggleAllNew(this)"></th>') +
+    NEW_COLS.map(c => '<th style="white-space:nowrap;padding:5px 4px;">' + esc(c.label) + '</th>').join('') +
+    (readOnlyNew ? '' : '<th style="padding:5px 4px;white-space:nowrap;">NEW READING ✎</th>') +
+    '<th style="padding:5px 4px;min-width:160px;">REMARKS' + (readOnlyNew ? '' : ' ✎') + '</th>';
+  const rows = shown.map(({ r, ri }) => {
+    const cells = NEW_COLS.map(c => {
+      const v = r.cells[c.i - 1];
+      const wrap = (c.i === 5) ? 'white-space:normal;word-break:break-word;min-width:120px;' : 'white-space:nowrap;';
+      return '<td class="copycell" onclick="copyCell(this)" title="Click to copy" data-v="' + esc(v ?? '') + '"' +
+        ' style="padding:5px 4px;' + wrap + 'cursor:pointer;">' + esc(v ?? '') + '</td>';
+    }).join('');
+    // Admins have READ-ONLY access here — supervisors do the editing/tagging.
+    const rmk = readOnlyNew
+      ? '<td style="padding:5px 4px;color:#374151;">' + esc(r.remarks || '') + '</td>'
+      : '<td style="padding:3px 4px;"><input type="text" class="rmk-input" data-ri="' + ri + '" ' +
+        'value="' + esc(r.remarks || '') + '" oninput="onRemarkEdit()" ' +
+        'style="width:100%;min-width:150px;padding:5px 7px;border:1.5px solid #e5e7eb;border-radius:6px;font-size:12px;font-family:inherit;outline:none;"></td>';
+    // An account with remarks but no reading is the changeover candidate — flag it
+    const hasRemark = String(r.remarks || '').trim() !== '';
+    const cb = readOnlyNew ? '' :
+      '<td style="text-align:center;padding:5px 3px;">' +
+      '<input type="checkbox" class="new-cb" data-ri="' + ri + '" onchange="updateChgBtn()"></td>';
+    // Type the reading here and the account becomes "taken" — it moves straight
+    // into Unbilled Taken on the next refresh.
+    const rd = readOnlyNew ? '' :
+      '<td style="padding:3px 4px;">' +
+      '<input type="number" class="rd-input" data-ri="' + ri + '" placeholder="reading…" ' +
+      'oninput="onReadingEdit()" ' +
+      'style="width:96px;padding:5px 7px;border:1.5px solid #0f766e;border-radius:6px;font-size:12px;font-family:inherit;outline:none;"></td>';
+    return '<tr data-ri="' + ri + '"' + (hasRemark ? ' style="background:#f5f3ff;"' : '') + '>' + cb + cells + rd + rmk + '</tr>';
+  }).join('');
+  body.innerHTML =
+    '<div style="border:1px solid #e5e7eb;border-radius:9px;overflow:hidden;">' +
+    '<table style="font-size:11.5px;width:100%;">' +
+    '<thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="hint" style="margin-top:6px;">' + shown.length + ' of ' + newRows.length + ' untaken account(s). Edit Remarks then press Save.</div>';
+  document.getElementById('rmk-save-btn').disabled = true;
+}
+
+function onRemarkEdit() {
+  document.getElementById('rmk-save-btn').disabled = false;
+}
+
+async function saveRemarks() {
+  const inputs = document.querySelectorAll('.rmk-input');
+  const items = [];
+  inputs.forEach(inp => {
+    const ri = parseInt(inp.getAttribute('data-ri'));
+    const r = newRows[ri];
+    if (!r) return;
+    if ((inp.value || '') !== (r.remarks || '')) items.push({ row: r.row, acno: r.acno, remarks: inp.value });
+  });
+  if (!items.length) { flash('No remark changes to save.', false); return; }
+  const btn = document.getElementById('rmk-save-btn');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+  try {
+    const d = await api({ action: 'save_remarks', items: items });
+    if (d.success) {
+      flash(d.saved + ' remark(s) saved' + (d.skipped ? ', ' + d.skipped + ' skipped' : '') + ' ✓', true);
+      // reflect saved values locally so further edits compare correctly
+      items.forEach(it => { const r = newRows.find(x => x.row === it.row); if (r) r.remarks = it.remarks; });
+      newCache = newRows; // keep cache in sync with saved remarks
+    } else {
+      flash(d.message || 'Could not save.', false);
+    }
+  } catch(e) {
+    if (e.message !== 'auth') flash('Could not connect.', false);
+  }
+  btn.textContent = '💾 Save remarks'; btn.disabled = true;
+}
+
+/* ── Dashboard ── */
+
+async function loadDashboard(force) {
+  const body = document.getElementById('dash-body');
+  if (!force && dashCache) { renderDashboard(dashCache); return; }
+  body.className = 'loading'; body.style.color = '#9ca3af'; body.textContent = 'Loading…';
+  try {
+    const d = await api({ action: 'dashboard' });
+    if (!d.success) { body.style.color = '#b91c1c'; body.textContent = d.message || 'Could not load.'; return; }
+    dashCache = d;
+    renderDashboard(d);
+  } catch(e) {
+    if (e.message !== 'auth') { body.style.color = '#b91c1c'; body.textContent = 'Could not connect.'; }
+  }
+}
+
+function tile(label, value, color) {
+  return '<div class="stat" style="text-align:left;padding:16px;">' +
+    '<div class="statn" style="color:' + (color || '#1F4E79') + ';">' + value + '</div>' +
+    '<div class="statl">' + label + '</div></div>';
+}
+
+let dashAreaFilter = 'all';
+
+function renderDashboard(d) {
+  const body = document.getElementById('dash-body');
+  body.className = ''; body.style.color = '';
+  document.getElementById('dash-month').textContent = d.currentMonth || '—';
+
+  // Area filter dropdown (persist selection across refreshes)
+  const areaList = d.areaList || [];
+  const opts = '<option value="all">All areas</option>' +
+    areaList.map(a => '<option value="' + esc(a) + '"' + (dashAreaFilter === a ? ' selected' : '') + '>Area ' + esc(a) + '</option>').join('');
+  const filterBar = '<div style="margin-bottom:16px;display:flex;align-items:center;gap:10px;">' +
+    '<span class="dsh-eyebrow" style="color:#6b7b8c;">Viewing</span>' +
+    '<select id="dash-area-filter" class="dsh-sel" onchange="onDashAreaChange()">' +
+    opts + '</select></div>';
+
+  body.innerHTML = filterBar + '<div id="dash-inner"></div>';
+  renderDashInner(d);
+}
+
+function onDashAreaChange() {
+  dashAreaFilter = document.getElementById('dash-area-filter').value;
+  if (dashCache) renderDashInner(dashCache);
+}
+
+// Build monthly series for the selected area (or combined for 'all')
+function dashMonthsFor(d, area) {
+  if (area === 'all') return d.months || [];
+  const rows = (d.monthAreas || []).filter(ma => String(ma.area) === String(area));
+  // ensure sorted by month
+  return rows.slice().sort((x, y) => x.month < y.month ? -1 : x.month > y.month ? 1 : 0);
+}
+
+function renderDashInner(d) {
+  const inner = document.getElementById('dash-inner');
+  const area = dashAreaFilter;
+  const months = dashMonthsFor(d, area);
+  const label = area === 'all' ? 'All areas' : 'Area ' + area;
+
+  // Current-month figures for the selected area
+  let c;
+  if (area === 'all') c = d.current || {};
+  else c = months.filter(m => m.month === d.currentMonth)[0] ||
+           { total: 0, taken: 0, pending: 0, noMeter: 0, dc: 0, completion: 0, units: 0 };
+  if (c.completion == null) c.completion = c.total ? Math.round(c.taken / c.total * 100) : 0;
+
+  // ── Hero: the meter dial. The needle is the month's completion. ──
+  const panel =
+    '<div class="dsh-panel">' +
+      gauge(c.completion || 0) +
+      '<div style="flex:1;min-width:180px;">' +
+        '<div class="dsh-eyebrow">' + esc(monthName(d.currentMonth)) + ' · ' + esc(label) + '</div>' +
+        '<div class="dsh-odo">' + odo(c.taken || 0) + ' <small>/ ' + (c.total || 0) + '</small></div>' +
+        '<div class="dsh-sub">meters read this month</div>' +
+        '<div style="margin-top:12px;display:flex;gap:18px;">' +
+          '<div><div class="dsh-eyebrow">Still pending</div>' +
+            '<div style="font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:19px;color:#ffb4a2;">' + (c.pending || 0) + '</div></div>' +
+          '<div><div class="dsh-eyebrow">No meter</div>' +
+            '<div style="font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:19px;color:#9fb6cc;">' + (c.noMeter || 0) + '</div></div>' +
+          '<div><div class="dsh-eyebrow">DC meters</div>' +
+            '<div style="font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:19px;color:#ff8a75;">' + (c.dc || 0) + '</div></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  // ── Year trend ──
+  const trend =
+    '<div class="dsh-h">Coverage through the year</div>' +
+    '<div class="dsh-card">' +
+      (months.length ? areaChart(months) : '<div class="hint">Nothing recorded yet for ' + esc(label) + '.</div>') +
+    '</div>';
+
+  // ── Month bars (replaces the old table) ──
+  const bars = months.slice().reverse().map(m => {
+    const t = m.total || 1;
+    const wT = (m.taken / t) * 100, wN = ((m.noMeter || 0) / t) * 100;
+    const wP = Math.max(0, 100 - wT - wN);
+    return '<div class="dsh-mrow">' +
+      '<span class="dsh-mlab">' + esc(m.month) + '</span>' +
+      '<span class="dsh-track">' +
+        '<span class="dsh-seg" style="width:' + wT + '%;background:#1FB2A6;"></span>' +
+        '<span class="dsh-seg" style="width:' + wN + '%;background:#8a97a6;"></span>' +
+        '<span class="dsh-seg" style="width:' + wP + '%;background:#f3b23f;"></span>' +
+      '</span>' +
+      '<span class="dsh-mcount">' + m.taken + '/' + m.total + '</span>' +
+      '<span class="dsh-mpct">' + m.completion + '%</span>' +
+    '</div>';
+  }).join('');
+  const monthly =
+    '<div class="dsh-h">Month by month</div>' +
+    '<div class="dsh-card">' +
+      (months.length ? bars +
+        '<div class="dsh-legend">' +
+          '<span><i style="background:#1FB2A6;"></i>Read</span>' +
+          '<span><i style="background:#f3b23f;"></i>Pending</span>' +
+          '<span><i style="background:#8a97a6;"></i>No meter</span>' +
+        '</div>'
+        : '<div class="hint">No months recorded.</div>') +
+    '</div>';
+
+  inner.innerHTML = panel + trend + monthly +
+    (d.ms != null ? '<div class="hint" style="margin-top:8px;">' +
+      (d.cached ? '⚡ served from cache' : '🔄 read from the sheet in ' + d.ms + 'ms') +
+      '</div>' : '');
+}
+
+// Month key "2026-07" → "July 2026"
+function monthName(mk) {
+  if (!mk || !/^\d{4}-\d{2}$/.test(mk)) return '—';
+  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return names[Number(mk.slice(5, 7)) - 1] + ' ' + mk.slice(0, 4);
+}
+
+// Odometer-style digits, padded like a meter counter
+function odo(n) {
+  const s = String(n);
+  return s.padStart(Math.max(4, s.length), '0');
+}
+
+// The signature element: an analog meter dial. Needle sweeps 0→100%.
+function gauge(pct) {
+  const p = Math.max(0, Math.min(100, pct));
+  const CX = 108, CY = 112, R = 84;
+  const LEN = Math.PI * R;                      // semicircle arc length
+  const done = (p / 100) * LEN;
+  // needle angle: 180° at 0%, 0° at 100%
+  const th = (180 - p * 1.8) * Math.PI / 180;
+  const nx = CX + (R - 16) * Math.cos(th);
+  const ny = CY - (R - 16) * Math.sin(th);
+  // tick marks every 10%
+  let ticks = '';
+  for (let i = 0; i <= 10; i++) {
+    const a = (180 - i * 18) * Math.PI / 180;
+    const r1 = R + 7, r2 = (i % 5 === 0) ? R + 15 : R + 11;
+    ticks += '<line x1="' + (CX + r1 * Math.cos(a)) + '" y1="' + (CY - r1 * Math.sin(a)) +
+      '" x2="' + (CX + r2 * Math.cos(a)) + '" y2="' + (CY - r2 * Math.sin(a)) +
+      '" stroke="' + (i % 5 === 0 ? '#5f8fb5' : '#2f4a66') + '" stroke-width="' + (i % 5 === 0 ? 2 : 1) + '"/>';
+  }
+  return '<svg viewBox="0 0 216 132" style="width:216px;height:132px;flex:none;">' +
+    '<defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="0">' +
+      '<stop offset="0%" stop-color="#f3b23f"/><stop offset="100%" stop-color="#1FB2A6"/>' +
+    '</linearGradient></defs>' +
+    ticks +
+    '<path d="M ' + (CX - R) + ' ' + CY + ' A ' + R + ' ' + R + ' 0 0 1 ' + (CX + R) + ' ' + CY + '" ' +
+      'fill="none" stroke="#22374d" stroke-width="13" stroke-linecap="round"/>' +
+    '<path d="M ' + (CX - R) + ' ' + CY + ' A ' + R + ' ' + R + ' 0 0 1 ' + (CX + R) + ' ' + CY + '" ' +
+      'fill="none" stroke="url(#gg)" stroke-width="13" stroke-linecap="round" ' +
+      'stroke-dasharray="' + done + ' ' + (LEN - done + 2) + '"/>' +
+    '<line x1="' + CX + '" y1="' + CY + '" x2="' + nx + '" y2="' + ny + '" stroke="#e8eef5" stroke-width="2.5" stroke-linecap="round"/>' +
+    '<circle cx="' + CX + '" cy="' + CY + '" r="6" fill="#e8eef5"/>' +
+    '<text x="' + CX + '" y="' + (CY - 26) + '" text-anchor="middle" ' +
+      'style="font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:30px;fill:#e8eef5;">' + p + '<tspan font-size="15" fill="#5f8fb5">%</tspan></text>' +
+    '<text x="' + CX + '" y="' + (CY - 10) + '" text-anchor="middle" ' +
+      'style="font-family:\'Space Grotesk\',sans-serif;font-size:9px;letter-spacing:.14em;fill:#5f8fb5;">COMPLETE</text>' +
+  '</svg>';
+}
+
+// Filled area chart of completion % across the year
+function areaChart(months) {
+  const W = 720, H = 210, L = 34, Rr = 12, T = 14, B = 30;
+  const iw = W - L - Rr, ih = H - T - B;
+  const n = months.length;
+  const X = i => L + (n <= 1 ? iw / 2 : (iw * i) / (n - 1));
+  const Y = v => T + ih - (ih * Math.max(0, Math.min(100, v))) / 100;
+
+  let grid = '';
+  [0, 50, 100].forEach(g => {
+    grid += '<line x1="' + L + '" y1="' + Y(g) + '" x2="' + (W - Rr) + '" y2="' + Y(g) + '" stroke="#eef2f6"/>' +
+      '<text x="' + (L - 7) + '" y="' + (Y(g) + 3) + '" text-anchor="end" ' +
+      'style="font-family:\'JetBrains Mono\',monospace;font-size:9px;fill:#a8b4c0;">' + g + '</text>';
+  });
+
+  const pts = months.map((m, i) => X(i) + ',' + Y(m.completion));
+  const fill = 'M ' + X(0) + ',' + Y(0) + ' L ' + pts.join(' L ') + ' L ' + X(n - 1) + ',' + Y(0) + ' Z';
+  const dots = months.map((m, i) =>
+    '<circle cx="' + X(i) + '" cy="' + Y(m.completion) + '" r="3.5" fill="#fff" stroke="#1FB2A6" stroke-width="2">' +
+      '<title>' + m.month + ' — ' + m.completion + '% (' + m.taken + ' of ' + m.total + ')</title></circle>' +
+    '<text x="' + X(i) + '" y="' + (H - B + 15) + '" text-anchor="middle" ' +
+      'style="font-family:\'JetBrains Mono\',monospace;font-size:9px;fill:#8a97a6;">' + m.month.slice(5) + '</text>'
+  ).join('');
+
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;min-width:480px;height:auto;">' +
+    '<defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="#1FB2A6" stop-opacity=".26"/>' +
+      '<stop offset="100%" stop-color="#1FB2A6" stop-opacity="0"/>' +
+    '</linearGradient></defs>' +
+    grid +
+    '<path d="' + fill + '" fill="url(#ag)"/>' +
+    '<polyline points="' + pts.join(' ') + '" fill="none" stroke="#0d9488" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+    dots +
+  '</svg>';
+}
+
+// SVG line graph: completion % per month across the year
+function lineGraph(months) {
+  const W = 720, H = 220, padL = 36, padR = 16, padT = 16, padB = 34;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const n = months.length;
+  const x = i => padL + (n <= 1 ? iw / 2 : (iw * i) / (n - 1));
+  const y = v => padT + ih - (ih * Math.max(0, Math.min(100, v))) / 100;
+  // gridlines at 0/25/50/75/100
+  let grid = '';
+  [0, 25, 50, 75, 100].forEach(g => {
+    const gy = y(g);
+    grid += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '" stroke="#eef0f3"/>' +
+      '<text x="' + (padL - 6) + '" y="' + (gy + 3) + '" text-anchor="end" font-size="9" fill="#9ca3af">' + g + '</text>';
+  });
+  const pts = months.map((m, i) => x(i) + ',' + y(m.completion));
+  const line = '<polyline points="' + pts.join(' ') + '" fill="none" stroke="#1F4E79" stroke-width="2.5"/>';
+  const dots = months.map((m, i) =>
+    '<circle cx="' + x(i) + '" cy="' + y(m.completion) + '" r="3.5" fill="#1F4E79"><title>' +
+    m.month + ': ' + m.completion + '% (' + m.taken + '/' + m.total + ')</title></circle>' +
+    '<text x="' + x(i) + '" y="' + (H - padB + 14) + '" text-anchor="middle" font-size="8.5" fill="#6b7280">' +
+    m.month.slice(2) + '</text>' +
+    '<text x="' + x(i) + '" y="' + (y(m.completion) - 8) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#1F4E79">' +
+    m.completion + '%</text>'
+  ).join('');
+  return '<div style="border:1px solid #e5e7eb;border-radius:9px;padding:8px;overflow-x:auto;">' +
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;min-width:520px;height:auto;">' +
+    grid + line + dots + '</svg>' +
+    '<div class="hint" style="text-align:center;">Completion % by month (taken ÷ total).</div></div>';
+}
+
+/* ── Fullscreen photo viewer (zoom / pan / negative / brightness) ── */
+let pvScale = 1, pvRot = 0, pvInverted = false, pvX = 0, pvY = 0;
+
+function pvOpen(src, acno) {
+  document.getElementById('pv-img').src = src;
+  document.getElementById('pv-title').textContent = 'Meter photo — ACNO ' + acno;
+  document.getElementById('pv').style.display = 'flex';
+  pvReset();
+}
+function pvClose() { document.getElementById('pv').style.display = 'none'; }
+
+function pvReset() {
+  pvScale = 1; pvRot = 0; pvInverted = false; pvX = 0; pvY = 0;
+  document.getElementById('pv-bright').value = 100;
+  document.getElementById('pv-contrast').value = 100;
+  document.getElementById('pv-inv').classList.remove('on');
+  pvApply();
+}
+function pvZoom(d) {
+  pvScale = Math.min(8, Math.max(0.25, pvScale + d));
+  pvApply();
+}
+function pvRotate() { pvRot = (pvRot + 90) % 360; pvApply(); }
+function pvInvert() {
+  pvInverted = !pvInverted;
+  document.getElementById('pv-inv').classList.toggle('on', pvInverted);
+  pvApply();
+}
+function pvApply() {
+  const img = document.getElementById('pv-img');
+  if (!img) return;
+  const b = document.getElementById('pv-bright').value;
+  const c = document.getElementById('pv-contrast').value;
+  img.style.filter = 'brightness(' + b + '%) contrast(' + c + '%)' + (pvInverted ? ' invert(1)' : '');
+  img.style.transform = 'translate(' + pvX + 'px,' + pvY + 'px) scale(' + pvScale + ') rotate(' + pvRot + 'deg)';
+  const lbl = document.getElementById('pv-zoomlbl');
+  if (lbl) lbl.textContent = Math.round(pvScale * 100) + '%';
+}
+
+// Wheel to zoom, drag to pan, Esc to close
+(function pvBind() {
+  const stage = document.getElementById('pv-stage');
+  if (!stage) return;
+  stage.addEventListener('wheel', e => {
+    e.preventDefault();
+    pvZoom(e.deltaY < 0 ? 0.2 : -0.2);
+  }, { passive: false });
+
+  let dragging = false, sx = 0, sy = 0;
+  stage.addEventListener('mousedown', e => {
+    dragging = true; sx = e.clientX - pvX; sy = e.clientY - pvY;
+    stage.style.cursor = 'grabbing';
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    pvX = e.clientX - sx; pvY = e.clientY - sy;
+    pvApply();
+  });
+  window.addEventListener('mouseup', () => { dragging = false; stage.style.cursor = 'grab'; });
+
+  document.addEventListener('keydown', e => {
+    if (document.getElementById('pv').style.display === 'none') return;
+    if (e.key === 'Escape') pvClose();
+    else if (e.key === '+' || e.key === '=') pvZoom(0.25);
+    else if (e.key === '-') pvZoom(-0.25);
+    else if (e.key.toLowerCase() === 'i') pvInvert();
+  });
+})();
+
+/* ── Change own password ── */
+function openPwModal() {
+  ['pw-cur','pw-new','pw-new2'].forEach(id => { document.getElementById(id).value = ''; });
+  const e = document.getElementById('pw-err');
+  e.style.display = 'none'; e.textContent = '';
+  document.getElementById('pw-modal').style.display = 'flex';
+  document.getElementById('pw-cur').focus();
+}
+function closePwModal() { document.getElementById('pw-modal').style.display = 'none'; }
+
+async function savePassword() {
+  const cur = document.getElementById('pw-cur').value;
+  const nw  = document.getElementById('pw-new').value;
+  const nw2 = document.getElementById('pw-new2').value;
+  const err = document.getElementById('pw-err');
+  const fail = (m) => { err.textContent = m; err.style.display = 'block'; };
+  err.style.display = 'none';
+
+  // Validate locally FIRST — anything we can catch here avoids a silent
+  // background failure after the window has closed.
+  if (!cur || !nw) return fail('Enter your current and new password.');
+  if (nw.length < 8) return fail('New password must be at least 8 characters.');
+  if (nw !== nw2) return fail('The two new passwords do not match.');
+  if (nw === cur) return fail('The new password is the same as the current one.');
+
+  // Close straight away and finish the save in the background.
+  closePwModal();
+  flash('Changing password…', true);
+
+  api({ action: 'change_password', currentPassword: cur, newPassword: nw })
+    .then(d => {
+      if (d && d.success) {
+        flash('Password changed ✓ — use it next time you sign in.', true);
+      } else {
+        // Loud failure: the password did NOT change, and they must know.
+        flash('⚠️ Password NOT changed: ' + ((d && d.message) || 'unknown error') +
+              ' — keep using your old password.', false);
+      }
+    })
+    .catch(e => {
+      if (e.message !== 'auth') {
+        flash('⚠️ Password NOT changed — could not connect. Keep using your old password.', false);
+      }
+    });
+}
+
+// The native date input renders in the browser's locale, which can read
+// month-first. Show the chosen batch date unambiguously as dd-mm-yyyy.
+function showSupDateLbl() {
+  const el = document.getElementById('sup-date');
+  const lbl = document.getElementById('sup-date-lbl');
+  if (!el || !lbl) return;
+  const m = String(el.value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  lbl.textContent = m ? ('= ' + m[3] + '-' + m[2] + '-' + m[1]) : '';
+}
+
+// Parse an HTML-table export (an ".xls" that is really HTML) into rows of raw
+// TEXT. Crucially the cell text is taken verbatim — nothing is interpreted as a
+// date here, so no month-first coercion can occur.
+function parseHtmlTable(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const table = doc.querySelector('table');
+  if (!table) return [];
+  const out = [];
+  table.querySelectorAll('tr').forEach(tr => {
+    const row = [];
+    tr.querySelectorAll('td,th').forEach(td => {
+      row.push(String(td.textContent || '').replace(/\u00a0/g, ' ').trim());
+    });
+    if (row.length) out.push(row);
+  });
+  return out;
+}
+
+// Rewrite every date column of a parsed CSV into ISO, day-first.
+function normalizeDateCols(rows) {
+  if (!rows) return rows;
+  const DATE_COL_IDX = [8, 11, 13]; // 0-based: I=PREV DATE, L=R_DATE, N=NEW DATE
+  return rows.map(r => r.map((cell, ci) => {
+    if (DATE_COL_IDX.indexOf(ci) === -1) return cell;
+    const iso = toIsoDayFirst(cell);
+    return iso || cell;
+  }));
+}
+
+// Work out how a text export separates its columns. A billing system may emit
+// TAB, comma or semicolon — assuming comma dumps every row into one column.
+function sniffDelimiter(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim()).slice(0, 10);
+  if (!lines.length) return ',';
+  const score = d => {
+    const counts = lines.map(l => l.split(d).length - 1);
+    const max = Math.max.apply(null, counts);
+    if (max === 0) return 0;
+    // reward a consistent, high column count
+    const consistent = counts.filter(c => c === max).length;
+    return max * consistent;
+  };
+  const cands = ['\t', ',', ';', '|'];
+  let best = ',', bestScore = 0;
+  cands.forEach(d => { const s = score(d); if (s > bestScore) { bestScore = s; best = d; } });
+  return best;
+}
+
+// Split delimited text into rows/cells, honouring quoted fields.
+function parseDelimited(text, delim) {
+  if (delim === ',') return parseCSV(text);   // existing quote-aware CSV reader
+  const rows = [];
+  text.split(/\r?\n/).forEach(line => {
+    if (!line.trim()) return;
+    rows.push(line.split(delim).map(c => {
+      let v = c.trim();
+      if (v.length > 1 && v[0] === '"' && v[v.length - 1] === '"') v = v.slice(1, -1);
+      return v;
+    }));
+  });
+  return rows;
+}
+
+// Convert a text date to ISO 'yyyy-mm-dd', reading it DAY-FIRST (dd-mm-yyyy /
+// dd/mm/yyyy), which is the format the source files use. Returns '' if the
+// text isn't a date at all, so non-date cells pass through untouched.
+function toIsoDayFirst(s) {
+  const t = String(s || '').trim();
+  if (!t) return '';
+  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);            // already ISO
+  if (m) return m[1] + '-' + ('0'+m[2]).slice(-2) + '-' + ('0'+m[3]).slice(-2);
+  m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);  // dd-mm-yyyy (day first)
+  if (!m) return '';
+  const d = Number(m[1]), mo = Number(m[2]);
+  let y = Number(m[3]);
+  if (y < 100) y += 2000;
+  if (d < 1 || d > 31 || mo < 1 || mo > 12) return '';
+  return y + '-' + ('0'+mo).slice(-2) + '-' + ('0'+d).slice(-2);
+}
+
+/* ── Area performance report ── */
+function initReportTab() {
+  const sel = document.getElementById('rep-area');
+  let opts = '<option value="">Select area…</option>';
+  assignedAreaList().forEach(a => { opts += '<option value="' + esc(a) + '">Area ' + esc(a) + '</option>'; });
+  sel.innerHTML = opts;
+}
+
+async function loadReport() {
+  const area = document.getElementById('rep-area').value;
+  const month = document.getElementById('rep-month').value; // 'yyyy-MM' or ''
+  const body = document.getElementById('rep-body');
+  if (!area) { body.className = 'loading'; body.style.color = '#b91c1c'; body.textContent = 'Select an area first.'; return; }
+  body.className = 'loading'; body.style.color = '#9ca3af'; body.textContent = 'Building report…';
+  try {
+    const d = await api({ action: 'area_report', area: area, month: month });
+    if (!d.success) { body.style.color = '#b91c1c'; body.textContent = d.message || 'Could not build the report.'; return; }
+    renderReport(d);
+  } catch(e) {
+    if (e.message !== 'auth') { body.style.color = '#b91c1c'; body.textContent = 'Could not connect.'; }
+  }
+}
+
+function ddmm(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? (m[3] + '-' + m[2] + '-' + m[1]) : (iso || '—');
+}
+
+function renderReport(d) {
+  const body = document.getElementById('rep-body');
+  body.className = ''; body.style.color = '';
+
+  const chip = (label, value, color) =>
+    '<div class="dsh-chip" style="--c:' + (color || '#1F4E79') + ';">' +
+      '<div class="n">' + value + '</div><div class="l">' + label + '</div></div>';
+
+  // The month's headline for this area: given, taken, and how complete it is.
+  const monthBox =
+    '<div style="background:#0d1b2c;color:#e8eef5;border-radius:12px;padding:16px 18px;margin-bottom:14px;">' +
+      '<div class="dsh-eyebrow">Area ' + esc(d.area) + ' · ' + esc(monthName(d.month)) + '</div>' +
+      '<div style="display:flex;gap:34px;margin-top:8px;flex-wrap:wrap;align-items:flex-end;">' +
+        '<div><div style="font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:30px;color:#ffc53d;">' + d.totalGiven + '</div>' +
+          '<div style="font-size:11px;color:#9fb6cc;">accounts given</div></div>' +
+        '<div><div style="font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:30px;color:#1FB2A6;">' + d.totalTaken + '</div>' +
+          '<div style="font-size:11px;color:#9fb6cc;">readings taken</div></div>' +
+        '<div><div style="font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:30px;color:#e8eef5;">' + d.pct + '%</div>' +
+          '<div style="font-size:11px;color:#9fb6cc;">complete</div></div>' +
+        '<div style="flex:1;min-width:160px;padding-bottom:6px;">' +
+          '<div style="height:10px;background:#22374d;border-radius:5px;overflow:hidden;">' +
+            '<div style="height:100%;width:' + Math.min(100, d.pct) + '%;background:linear-gradient(90deg,#f3b23f,#1FB2A6);border-radius:5px;"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  // Totals now live in the panel above — chips carry only what isn't there.
+  const chips = '<div class="dsh-chips">' +
+    chip('Pending', d.pending, '#f3b23f') +
+    chip('No meters', d.noMeter, '#8a97a6') +
+    chip('Changeovers', d.changeover || 0, '#7c3aed') +
+    chip('DC meters', d.dc, '#dc2626') +
+    chip('DC readings taken', d.dcTaken + ' (' + d.dcPct + '%)', '#dc2626') +
+    '</div>';
+
+  const rows = (d.rows || []).map(r => {
+    const isToday = r.date === d.today;
+    return '<tr' + (isToday ? ' style="background:#fef9c3;font-weight:700;"' : '') + '>' +
+      '<td style="font-family:\'JetBrains Mono\',monospace;">' + esc(ddmm(r.date)) + (isToday ? ' ←' : '') + '</td>' +
+      '<td>' + r.given + '</td>' +
+      '<td style="color:#0d9488;font-weight:700;">' + r.taken + '</td>' +
+      '<td style="min-width:150px;"><div style="display:flex;align-items:center;gap:8px;">' +
+        '<div class="bar-bg" style="flex:1;"><div class="bar-fill" style="width:' + Math.min(100, r.pct) + '%;"></div></div>' +
+        '<span class="pct">' + r.pct + '%</span></div></td>' +
+    '</tr>';
+  }).join('');
+
+  const table = (d.rows && d.rows.length)
+    ? '<div style="overflow-x:auto;border:1px solid #e6eaf0;border-radius:11px;"><table style="font-size:12.5px;width:100%;">' +
+      '<thead><tr><th>Date</th><th>Given (R_DATE)</th><th>Taken (on that date)</th><th style="min-width:150px;">Daily %</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+      '<tfoot><tr style="background:#f6f8fa;font-weight:800;">' +
+        '<td>Total</td><td>' + d.totalGiven + '</td><td style="color:#0d9488;">' + d.totalTaken + '</td>' +
+        '<td>' + d.pct + '%</td>' +
+      '</tr></tfoot></table></div>'
+    : '<div class="hint">No data for this area/month.</div>';
+
+  // Drill-down lists. Collapsed by default — they can run long, and the
+  // summary is what you read first. Only Pending carries remarks: that's the
+  // list where "why hasn't this been read?" is the whole point.
+  const detail = (title, list, color, withRemarks) => {
+    const n = (list || []).length;
+    if (!n) return '';
+    const rows = list.map(a =>
+      '<tr>' +
+        '<td style="font-family:\'JetBrains Mono\',monospace;font-weight:700;">' + esc(a.acno) + '</td>' +
+        '<td style="font-family:\'JetBrains Mono\',monospace;">' + esc(a.meter || '—') + '</td>' +
+        '<td>' + esc(a.address || '—') + '</td>' +
+        '<td style="font-family:\'JetBrains Mono\',monospace;text-align:right;">' + esc(a.prevReading || '—') + '</td>' +
+        '<td style="font-family:\'JetBrains Mono\',monospace;">' + esc(a.prevDate || '—') + '</td>' +
+        (withRemarks
+          ? '<td style="color:' + (String(a.remarks || '').trim() ? '#7c3aed' : '#9ca3af') + ';">' +
+            (String(a.remarks || '').trim() ? esc(a.remarks) : '—') + '</td>'
+          : '') +
+      '</tr>').join('');
+    return '<details style="margin-top:10px;border:1px solid #e6eaf0;border-radius:11px;overflow:hidden;">' +
+      '<summary style="cursor:pointer;padding:10px 14px;background:#f6f8fa;font-weight:700;font-size:13px;color:' + color + ';">' +
+        esc(title) + ' <span style="color:#6b7b8c;font-weight:400;">(' + n + ')</span>' +
+      '</summary>' +
+      '<div style="overflow-x:auto;"><table style="font-size:12px;width:100%;">' +
+        '<thead><tr><th>ACNO</th><th>Meter No</th><th>Cons Address</th><th style="text-align:right;">Prev Reading</th><th>Prev Date</th>' +
+          (withRemarks ? '<th>Remarks</th>' : '') + '</tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></div>' +
+    '</details>';
+  };
+
+  const details =
+    '<div class="dsh-h">Account details</div>' +
+    detail('🔴 DC meters', d.dcList, '#dc2626', false) +
+    detail('🚫 No meters', d.noMeterList, '#6b7280', false) +
+    detail('🔁 Changeover meters', d.changeoverList, '#7c3aed', false) +
+    detail('⏳ Pending meters', d.pendingList, '#b45309', true) +
+    ((d.dcList || []).length + (d.noMeterList || []).length +
+     (d.changeoverList || []).length + (d.pendingList || []).length === 0
+      ? '<div class="hint">Nothing outstanding — every account has a reading.</div>' : '');
+
+  body.innerHTML =
+    '<div id="rep-print">' +
+      '<div class="dsh-h" style="margin-top:0;">Area ' + esc(d.area) + ' · ' + esc(d.month || '') + '</div>' +
+      monthBox + chips +
+      '<div class="dsh-h">Daily breakdown</div>' + table +
+      '<div class="hint" style="margin-top:8px;">Given = accounts issued that day (R_DATE). Taken = readings actually recorded on that day (NEW DATE).</div>' +
+      details +
+    '</div>';
+}
+
+function printReport() {
+  const el = document.getElementById('rep-print');
+  if (!el) { flash('Generate the report first.', false); return; }
+  // A collapsed <details> prints blank — force them all open in the print copy.
+  const copy = el.cloneNode(true);
+  copy.querySelectorAll('details').forEach(d => d.setAttribute('open', 'open'));
+  const w = window.open('', '_blank');
+  w.document.write('<html><head><title>Area report</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">' +
+    '<style>body{font-family:\'Space Grotesk\',sans-serif;padding:24px;color:#111;}' +
+    'table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;font-size:11px;}' +
+    'th{background:#f3f4f6;}.bar-bg{background:#eee;height:8px;border-radius:4px;}.bar-fill{background:#1FB2A6;height:8px;border-radius:4px;}' +
+    '.dsh-chips{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;}.dsh-chip{border:1px solid #ddd;border-radius:8px;padding:8px 12px;}' +
+    '.dsh-chip .n{font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:18px;}.dsh-chip .l{font-size:10px;color:#666;}' +
+    '.dsh-h{font-weight:700;margin:14px 0 8px;}summary{font-weight:700;padding:6px 0;margin-top:10px;}' +
+    'details{page-break-inside:avoid;}</style></head><body>' +
+    copy.innerHTML + '</body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 400);
+}
+
+// The native date input renders in the browser's locale, which can read
+// month-first. Echo the choice as dd-mm-yyyy so it can't be misread.
+function showRdDateLbl() {
+  const el = document.getElementById('rd-date');
+  const lbl = document.getElementById('rd-date-lbl');
+  if (!el || !lbl) return;
+  const m = String(el.value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  lbl.textContent = m ? ('= ' + m[3] + '-' + m[2] + '-' + m[1]) : '';
+}
+
+/* ── Changeover tagging (Unbilled New) ── */
+function toggleAllNew(cb) {
+  document.querySelectorAll('.new-cb').forEach(x => { x.checked = cb.checked; });
+  updateChgBtn();
+}
+function updateChgBtn() {
+  const any = Array.from(document.querySelectorAll('.new-cb')).some(x => x.checked);
+  ['chg-btn', 'att-btn'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.disabled = !any;
+  });
+}
+
+async function tagAs(tag) {
+  const items = [];
+  document.querySelectorAll('.new-cb').forEach(cb => {
+    if (!cb.checked) return;
+    const r = newRows[parseInt(cb.getAttribute('data-ri'))];
+    if (r) items.push({ row: r.row, acno: r.acno });
+  });
+  if (!items.length) { flash('Tick the accounts to move first.', false); return; }
+
+  const isChg = (tag === 'CHANGEOVER');
+  const msg = isChg
+    ? 'Tag ' + items.length + ' account(s) as CHANGEOVER?\n\nThe meter is being swapped, so there is no reading. ' +
+      'They move to Unbilled Taken and count as taken in the reports.'
+    : 'Mark ' + items.length + ' account(s) as ATTENDED?\n\nThey move to Unbilled Taken, where you can type ' +
+      'the reading in to complete them. They count as taken in the reports.';
+  if (!confirm(msg)) return;
+
+  const btn = document.getElementById(isChg ? 'chg-btn' : 'att-btn');
+  const label = btn.textContent;
+  btn.textContent = 'Working…'; btn.disabled = true;
+  try {
+    const d = await api({ action: isChg ? 'tag_changeover' : 'tag_attended', tag: tag, items: items });
+    if (d && d.success) {
+      flash(d.tagged + ' account(s) moved to Unbilled Taken ✓' + (d.skipped ? ', ' + d.skipped + ' skipped' : ''), true);
+      newCache = null;                 // it has left Unbilled New
+      preloadCache = null;             // and joined Unbilled Taken
+      dashCache = null;                // counts changed
+      loadUnbilledNew(true);
+      if (session.user.role === 'supervisor') startPreload();
+    } else {
+      flash((d && d.message) || 'Could not tag.', false);
+    }
+  } catch(e) {
+    if (e.message !== 'auth') flash('Could not connect.', false);
+  }
+  btn.textContent = label; btn.disabled = true;
+}
+
+/* ── Light / dark theme ── */
+function applyTheme(mode) {
+  document.documentElement.setAttribute('data-theme', mode);
+  const b = document.getElementById('theme-btn');
+  if (b) {
+    b.textContent = (mode === 'dark') ? '☀️' : '🌙';
+    b.title = (mode === 'dark') ? 'Switch to light' : 'Switch to dark';
+  }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', mode === 'dark' ? '#0b1219' : '#1F4E79');
+  try { localStorage.setItem('ub_theme', mode); } catch(e) {}
+}
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
+}
+// Restore the saved choice; fall back to the OS preference.
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem('ub_theme'); } catch(e) {}
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(saved || (prefersDark ? 'dark' : 'light'));
+})();
+
+/* ── Login grid: cells strike on contact, then bleed back to dark ── */
+(function loginGrid() {
+  const wrap = document.getElementById('grid-bg');
+  if (!wrap) return;
+
+  function build() {
+    const cell = 48;                                   // 46px + 2px gap
+    const cols = Math.ceil(window.innerWidth / cell);
+    const rows = Math.ceil(window.innerHeight / cell);
+    const total = Math.min(cols * rows, 1200);         // cap: don't flood the DOM
+    if (wrap.childElementCount === total) return;
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < total; i++) {
+      const d = document.createElement('div');
+      d.className = 'gcell';
+      frag.appendChild(d);
+    }
+    wrap.innerHTML = '';
+    wrap.appendChild(frag);
+  }
+
+  // Instant strike, then let the CSS transition fade it out. Removing the class
+  // on the next frame is what makes the slow bleed-back happen.
+  function strike(el) {
+    if (!el || !el.classList.contains('gcell')) return;
+    el.classList.add('lit');
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('lit')));
+  }
+
+  wrap.addEventListener('pointerover', e => strike(e.target));
+  // Touch: light whatever is under the finger as it moves
+  wrap.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    if (t) strike(document.elementFromPoint(t.clientX, t.clientY));
+  }, { passive: true });
+
+  build();
+  let rt;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(build, 200); });
+})();
+
+function onReadingEdit() {
+  const b = document.getElementById('rd-save-btn');
+  if (b) b.disabled = false;
+}
+
+// Save readings typed into Unbilled New. Entering a reading makes the account
+// "taken" — it leaves this tab and appears in Unbilled Taken.
+async function saveReadings() {
+  const items = [];
+  document.querySelectorAll('.rd-input').forEach(inp => {
+    const r = newRows[parseInt(inp.getAttribute('data-ri'))];
+    if (!r) return;
+    const val = String(inp.value || '').trim();
+    if (val !== '') items.push({ row: r.row, acno: r.acno, reading: val });
+  });
+  if (!items.length) { flash('Type a reading first.', false); return; }
+
+  const rdDate = String((document.getElementById('rd-date') || {}).value || '');
+  if (!rdDate) { flash('Choose the reading date first.', false); return; }
+
+  const btn = document.getElementById('rd-save-btn');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+  try {
+    const d = await api({ action: 'sup_update_reading', items: items, date: rdDate });
+    if (d && d.success) {
+      flash(d.saved + ' reading(s) saved on ' + ddmm(rdDate) + ' ✓ — moved to Unbilled Taken' +
+        (d.skipped ? ', ' + d.skipped + ' skipped' : ''), true);
+      newCache = null; preloadCache = null; dashCache = null;
+      loadUnbilledNew(true);                                   // they leave this list
+      if (session.user.role === 'supervisor') startPreload();  // and join that one
+    } else {
+      flash((d && d.message) || 'Could not save.', false);
+    }
+  } catch(e) {
+    if (e.message !== 'auth') flash('Could not connect.', false);
+  }
+  btn.textContent = '💾 Save readings'; btn.disabled = true;
+}
+
+/* ── Init ── */
+(function init() {
+  const saved = localStorage.getItem('ub_admin_session');
+  if (saved) {
+    try {
+      session = JSON.parse(saved);
+      if (session && session.token && session.user &&
+          (session.user.role === 'admin' || session.user.role === 'supervisor')) {
+        enterMain();
+        return;
+      }
+    } catch(e) {}
+    session = null;
+    localStorage.removeItem('ub_admin_session');
+  }
+  document.getElementById('v-login').style.display = 'flex';
+})();
+</script>
+  <!-- Change password -->
+  <div id="pw-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:550;align-items:center;justify-content:center;padding:16px;">
+    <div class="card" style="max-width:380px;width:100%;">
+      <h3 style="margin-bottom:14px;">🔑 Change your password</h3>
+      <div class="lfield">
+        <label>Current password</label>
+        <input type="password" id="pw-cur" autocomplete="current-password">
+      </div>
+      <div class="lfield">
+        <label>New password</label>
+        <input type="password" id="pw-new" autocomplete="new-password">
+      </div>
+      <div class="lfield">
+        <label>Confirm new password</label>
+        <input type="password" id="pw-new2" autocomplete="new-password"
+          onkeydown="if(event.key==='Enter')savePassword()">
+      </div>
+      <div class="err" id="pw-err"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="bigbtn cancel" onclick="closePwModal()">Cancel</button>
+        <button class="bigbtn" id="pw-save" onclick="savePassword()">Change password</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen photo viewer -->
+  <div id="pv" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.92);z-index:600;flex-direction:column;">
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(0,0,0,.35);flex-wrap:wrap;">
+      <span id="pv-title" style="color:#fff;font-weight:700;font-size:14px;margin-right:auto;">Meter photo</span>
+      <button class="pvbtn" onclick="pvZoom(-0.25)">➖</button>
+      <span id="pv-zoomlbl" style="color:#cbd5e1;font-size:12px;min-width:44px;text-align:center;">100%</span>
+      <button class="pvbtn" onclick="pvZoom(0.25)">➕</button>
+      <button class="pvbtn" onclick="pvRotate()">⟳</button>
+      <button class="pvbtn" id="pv-inv" onclick="pvInvert()">◐ Negative</button>
+      <button class="pvbtn" onclick="pvReset()">Reset</button>
+      <button class="pvbtn" style="background:#dc2626;" onclick="pvClose()">✕ Close</button>
+    </div>
+    <div style="display:flex;gap:16px;align-items:center;padding:8px 14px;background:rgba(0,0,0,.25);flex-wrap:wrap;">
+      <label style="color:#cbd5e1;font-size:12px;display:flex;align-items:center;gap:6px;">
+        ☀️ Brightness
+        <input type="range" id="pv-bright" min="50" max="250" value="100" oninput="pvApply()" style="width:130px;">
+      </label>
+      <label style="color:#cbd5e1;font-size:12px;display:flex;align-items:center;gap:6px;">
+        ◑ Contrast
+        <input type="range" id="pv-contrast" min="50" max="300" value="100" oninput="pvApply()" style="width:130px;">
+      </label>
+      <span style="color:#64748b;font-size:11px;">Scroll to zoom · drag to pan</span>
+    </div>
+    <div id="pv-stage" style="flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:grab;">
+      <img id="pv-img" src="" alt="Meter photo" style="max-width:100%;max-height:100%;transform-origin:center center;user-select:none;-webkit-user-drag:none;">
+    </div>
+  </div>
+</body>
+</html>

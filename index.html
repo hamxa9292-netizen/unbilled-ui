@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1F4E79">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Unbilled Readings</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overscroll-behavior-y:none;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;}
+.app{max-width:430px;margin:0 auto;height:100%;position:relative;}
+.hdr{background:#1F4E79;color:#fff;height:48px;padding:0 12px;display:flex;align-items:center;gap:6px;position:fixed;top:0;left:0;right:0;max-width:430px;margin:0 auto;z-index:100;}
+.content{position:fixed;top:48px;bottom:60px;left:0;right:0;max-width:430px;margin:0 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#f0f2f5;}
+.hdr h1{font-size:15px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.hdr-name{font-size:12px;opacity:.85;cursor:pointer;flex-shrink:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;}
+.hdr-rf{background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:7px;padding:5px 8px;font-size:13px;line-height:1;cursor:pointer;margin-left:3px;flex-shrink:0;}
+.sbar{font-size:12px;padding:6px 16px;align-items:center;gap:6px;display:none;position:fixed;top:48px;left:0;right:0;max-width:430px;margin:0 auto;z-index:99;}
+.sbar.show{display:flex;}
+.sbar.offline{background:#92400e;color:#fef3c7;}
+.sbar.syncing{background:#1e40af;color:#dbeafe;}
+.sbar.ok{background:#14532d;color:#dcfce7;}
+.screen{display:none;}
+.screen.active{display:block;}
+
+/* Login screen */
+.login-wrap{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:#1F4E79;z-index:200;max-width:430px;margin:0 auto;}
+.login-box{background:#fff;border-radius:16px;padding:28px 24px;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2);}
+.login-logo{text-align:center;margin-bottom:20px;}
+.login-logo .ico{font-size:40px;}
+.login-logo h2{font-size:20px;font-weight:800;color:#1F4E79;margin-top:6px;}
+.login-logo p{font-size:13px;color:#6b7280;margin-top:2px;}
+.lfield{margin-bottom:14px;}
+.lfield label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:5px;}
+.lfield input{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:15px;font-family:inherit;outline:none;color:#111;}
+.lfield input:focus{border-color:#1F4E79;}
+.login-btn{width:100%;padding:13px;background:#1F4E79;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;}
+.login-btn:active{opacity:.85;}
+.login-err{background:#fee2e2;color:#b91c1c;padding:9px 13px;border-radius:8px;font-size:13px;margin-top:12px;display:none;text-align:center;}
+
+/* Area selector screen */
+.area-screen{padding:20px 16px;}
+.area-title{font-size:18px;font-weight:700;color:#1F4E79;margin-bottom:6px;}
+.area-sub{font-size:14px;color:#6b7280;margin-bottom:20px;}
+.area-load{background:#1E7145;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;width:100%;cursor:pointer;font-family:inherit;}
+
+/* Search + list */
+.topbar{background:#1F4E79;padding:0 12px 12px;position:sticky;top:46px;z-index:99;}
+.area-chip{display:flex;align-items:center;gap:6px;margin-bottom:8px;padding-top:10px;flex-wrap:wrap;}
+.achip{background:rgba(255,255,255,.2);color:#fff;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;}
+.achange{background:none;border:none;color:rgba(255,255,255,.7);font-size:12px;cursor:pointer;font-family:inherit;text-decoration:underline;}
+.sw{position:relative;}
+.sw input{width:100%;padding:11px 70px 11px 42px;font-size:15px;border:none;border-radius:10px;background:#fff;font-family:inherit;outline:none;color:#111;}
+.sw .ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:17px;color:#9ca3af;}
+.sw .go{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:#1F4E79;color:#fff;border:none;border-radius:7px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;}
+.lhdr{padding:10px 16px 6px;display:flex;justify-content:space-between;}
+.lhdr-t{font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;}
+.lhdr-c{font-size:12px;color:#9ca3af;}
+.acard{background:#fff;margin:0 12px 8px;border-radius:12px;padding:13px 14px;box-shadow:0 1px 2px rgba(0,0,0,.06);cursor:pointer;border-left:4px solid #f59e0b;display:flex;align-items:center;gap:10px;}
+.acard:active{opacity:.85;}
+.acard.updated{background:#f0fdf4;border-left-color:#16a34a;}
+.ainfo{flex:1;min-width:0;}
+.aacno{font-size:15px;font-weight:700;color:#1F4E79;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.utag{font-size:10px;font-weight:700;color:#16a34a;background:#dcfce7;padding:2px 7px;border-radius:10px;}
+.ameter{font-size:12px;color:#374151;font-weight:500;margin-top:2px;}
+.aaddr{font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+.ardate{font-size:11px;color:#9ca3af;margin-top:2px;}
+.arr{font-size:18px;color:#d1d5db;flex-shrink:0;}
+.badge{display:inline-flex;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+.bp{background:#fef3c7;color:#92400e;}
+.bd{background:#d1fae5;color:#065f46;}
+.errmsg{background:#fee2e2;color:#b91c1c;padding:9px 13px;border-radius:8px;font-size:13px;margin-bottom:10px;display:none;}
+.rmphoto{margin-top:6px;background:#fee2e2;color:#b91c1c;border:none;padding:6px 12px;border-radius:8px;font-size:13px;cursor:pointer;width:100%;font-family:inherit;}
+.swrap{text-align:center;padding:48px 20px;}
+.sico{font-size:60px;margin-bottom:14px;}
+.stitle{font-size:20px;font-weight:700;color:#111;margin-bottom:6px;}
+.ssub{font-size:14px;color:#6b7280;margin-bottom:26px;}
+.btn{width:100%;padding:13px;border-radius:10px;font-size:15px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn:active{opacity:.82;}
+.btnp{background:#1F4E79;color:#fff;}
+.btns{background:#1E7145;color:#fff;}
+.btng{background:#f3f4f6;color:#374151;}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 14px 10px;}
+.stat{background:#fff;border-radius:12px;padding:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.statn{font-size:24px;font-weight:800;color:#1F4E79;}
+.statl{font-size:11px;color:#6b7280;margin-top:2px;}
+.nav{display:flex;background:#fff;border-top:1px solid #e5e7eb;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;z-index:100;}
+.nbtn{flex:1;padding:9px 4px 11px;text-align:center;font-size:11px;font-weight:500;color:#9ca3af;cursor:pointer;border:none;background:none;font-family:inherit;position:relative;}
+.nbtn.active{color:#1F4E79;}
+.nico{font-size:21px;display:block;margin-bottom:1px;}
+.ndot{width:8px;height:8px;background:#ef4444;border-radius:50%;display:none;position:absolute;top:7px;right:calc(50% - 18px);}
+.spin{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite;display:inline-block;}
+@keyframes sp{to{transform:rotate(360deg);}}
+.loading{text-align:center;padding:40px 20px;color:#9ca3af;font-size:14px;line-height:1.8;}
+.loadmore{margin:4px 12px 14px;padding:11px;background:#fff;border:1.5px dashed #d1d5db;border-radius:10px;color:#6b7280;font-size:14px;text-align:center;cursor:pointer;font-family:inherit;width:calc(100% - 24px);}
+.empty{text-align:center;padding:48px 20px;color:#9ca3af;}
+.plist{padding:0 12px;}
+
+/* ── DETAIL SCREEN — compact, no wasted space ── */
+#screen-detail {
+  flex-direction: column;
+  background: #111827;
+  min-height: 100%;
+  overflow-y: auto;
+  padding-bottom: 96px; /* room for the fixed Prev/Save/Next bar */
+}
+
+/* Compact sticky header */
+#detail-hdr {
+  background: #1F4E79;
+  padding: 8px 12px;
+  border-bottom: 2px solid #fbbf24;
+  flex-shrink: 0;
+}
+
+/* Body: only as tall as its content, no flex-grow */
+#detail-body {
+  padding: 10px 12px 8px;
+  flex-shrink: 0;
+}
+
+/* Fixed bottom action buttons — repositioned via JS to sit above keyboard */
+#detail-btns {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 8px 12px 12px;
+  background: #0f172a;
+  border-top: 2px solid #1e293b;
+  z-index: 999;
+}
+@keyframes needphoto{0%,100%{transform:translateX(0);}20%,60%{transform:translateX(-4px);}40%,80%{transform:translateX(4px);}}
+.need-photo{animation:needphoto .5s ease-in-out 2;box-shadow:0 0 0 3px rgba(239,68,68,.6);}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="hdr">
+  <span style="font-size:21px">⚡</span>
+  <h1>Unbilled Readings</h1>
+  <span class="hdr-name" onclick="changeName()">👤 <span id="wlabel">Field Staff</span></span>
+  <button class="hdr-rf" id="rfbtn" onclick="hardRefresh()">🔄</button>
+  <button class="hdr-rf" onclick="openPwModal()" style="margin-left:0;">🔑</button>
+  <button class="hdr-rf" onclick="doLogout()" style="margin-left:0;">🚪</button>
+</div>
+<div class="sbar" id="sbar"></div>
+
+<!-- Change password -->
+<div id="pw-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:600;align-items:center;justify-content:center;padding:18px;">
+  <div style="background:#111827;border:1px solid #374151;border-radius:14px;padding:18px;width:100%;max-width:340px;">
+    <h3 style="color:#fff;font-size:16px;margin:0 0 14px;">🔑 Change password</h3>
+    <label style="display:block;color:#9ca3af;font-size:12px;margin-bottom:4px;">Current password</label>
+    <input type="password" id="pw-cur" autocomplete="current-password"
+      style="width:100%;padding:11px;border:1.5px solid #374151;border-radius:9px;background:#1f2937;color:#fff;font-size:15px;font-family:inherit;outline:none;margin-bottom:10px;">
+    <label style="display:block;color:#9ca3af;font-size:12px;margin-bottom:4px;">New password</label>
+    <input type="password" id="pw-new" autocomplete="new-password"
+      style="width:100%;padding:11px;border:1.5px solid #374151;border-radius:9px;background:#1f2937;color:#fff;font-size:15px;font-family:inherit;outline:none;margin-bottom:10px;">
+    <label style="display:block;color:#9ca3af;font-size:12px;margin-bottom:4px;">Confirm new password</label>
+    <input type="password" id="pw-new2" autocomplete="new-password"
+      style="width:100%;padding:11px;border:1.5px solid #374151;border-radius:9px;background:#1f2937;color:#fff;font-size:15px;font-family:inherit;outline:none;">
+    <div id="pw-err" style="display:none;color:#fca5a5;font-size:13px;margin-top:8px;"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button onclick="closePwModal()" style="flex:1;padding:12px;border:none;border-radius:9px;background:#374151;color:#fff;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">Cancel</button>
+      <button id="pw-save" onclick="savePassword()" style="flex:1;padding:12px;border:none;border-radius:9px;background:#16a34a;color:#fff;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">Change</button>
+    </div>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- LOGIN SCREEN -->
+  <div class="screen" id="screen-login">
+    <div class="login-wrap">
+      <div class="login-box">
+        <div class="login-logo">
+          <div class="ico">⚡</div>
+          <h2>Unbilled Readings</h2>
+          <p>STELCO Field App · v20 · security</p>
+        </div>
+        <div class="lfield">
+          <label>Username</label>
+          <input type="text" id="l-user" placeholder="Enter username" autocomplete="username" autocapitalize="none">
+        </div>
+        <div class="lfield">
+          <label>Password</label>
+          <input type="password" id="l-pass" placeholder="Enter password" autocomplete="current-password"
+            onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="login-btn" onclick="doLogin()" id="login-btn">Sign In</button>
+        <div class="login-err" id="login-err"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AREA SELECTION SCREEN -->
+  <div class="screen" id="screen-area">
+    <div class="area-screen">
+      <div class="area-title">Select Area</div>
+      <div class="area-sub">Choose an area to load its accounts</div>
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:5px;">Area</label>
+        <select id="area-select" style="width:100%;padding:12px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:16px;background:#fff;color:#111;font-family:inherit;outline:none;">
+          <option value="all">All Areas</option>
+        </select>
+      </div>
+      <button class="area-load" id="area-load-btn" onclick="loadSelectedArea()">Load Accounts →</button>
+      <div id="area-err" style="color:#b91c1c;font-size:13px;margin-top:10px;display:none;text-align:center;"></div>
+    </div>
+  </div>
+
+  <!-- HOME (account list) -->
+  <div class="screen" id="screen-home">
+    <div class="topbar">
+      <div class="area-chip">
+        <span class="achip" id="area-chip">Area: All</span>
+        <span class="achip" id="today-chip" style="background:rgba(255,255,255,.12);">✍ 0 today</span>
+        <button class="achange" onclick="showAreaScreen()">Change area</button>
+      </div>
+      <div class="sw">
+        <span class="ico">🔍</span>
+        <input type="number" id="sinput" placeholder="Search account / meter no..." inputmode="numeric" autocomplete="off"
+          oninput="filterList(this.value)" onkeydown="if(event.key==='Enter')quickSearch()">
+        <button class="go" onclick="quickSearch()">Go</button>
+      </div>
+    </div>
+    <div class="lhdr">
+      <span class="lhdr-t" id="ltitle">Unbilled Accounts</span>
+      <span class="lhdr-c" id="lcount"></span>
+    </div>
+    <div id="alist"></div>
+    <button class="loadmore" id="lmbtn" onclick="loadMore()" style="display:none">Load more ↓</button>
+  </div>
+
+  <!-- DETAIL SCREEN — compact layout -->
+  <div class="screen" id="screen-detail">
+
+    <!-- Compact sticky header -->
+    <div id="detail-hdr">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;">
+        <button onclick="goBack()" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;flex-shrink:0;">✕ List</button>
+        <span class="badge" id="d-status" style="flex-shrink:0;"></span>
+      </div>
+      <div style="color:#7dd3fc;font-size:13px;font-weight:700;line-height:1.3;word-break:break-word;" id="d-addr"></div>
+      <div style="color:#fff;font-size:13px;margin-top:3px;display:flex;flex-wrap:wrap;gap:6px;">
+        <span><span style="opacity:.7;font-size:11px;">AC: </span><span style="font-weight:800;font-size:15px;" id="d-acno"></span></span>
+        <span style="opacity:.4;">|</span>
+        <span><span style="opacity:.7;font-size:11px;">Area: </span><span style="font-weight:700;font-size:13px;" id="d-area"></span></span>
+        <span style="opacity:.4;">|</span>
+        <span><span style="opacity:.7;font-size:11px;">Meter: </span><span style="font-weight:700;font-size:15px;color:#7dd3fc;" id="d-meter"></span></span>
+      </div>
+      <div style="color:#fbbf24;font-size:12px;margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span style="font-weight:700;" id="d-prev"></span>
+        <span style="opacity:.6;"> on </span>
+        <span id="d-pdate"></span>
+        <span style="opacity:.4;margin:0 2px;">|</span>
+        <span style="color:#fff;opacity:.8;">R_DATE: </span>
+        <span style="color:#fff;font-weight:700;" id="d-rdate"></span>
+        <span style="opacity:.4;margin:0 2px;">|</span>
+        <!-- Photo inline -->
+        <span id="pbw" style="display:inline-flex;align-items:center;gap:4px;">
+          <button id="photo-btn" onclick="document.getElementById('pinput').click()" title="Take a photo with the camera" style="background:#fbbf24;border:none;color:#1f2937;font-weight:700;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;">📷 Photo *</button>
+          <button id="gallery-btn" onclick="document.getElementById('ginput').click()" title="Choose an existing photo" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:inherit;">🖼️</button>
+          <!-- capture=environment opens the camera straight away; the second input has no
+               capture attribute, so it opens the gallery/file picker instead. -->
+          <input type="file" id="pinput" accept="image/*" capture="environment" style="display:none" onchange="previewPhoto(this)">
+          <input type="file" id="ginput" accept="image/*" style="display:none" onchange="previewPhoto(this)">
+        </span>
+        <span id="pp" style="display:none;align-items:center;gap:4px;">
+          <img id="pimg" src="" style="border-radius:4px;height:20px;width:28px;object-fit:cover;vertical-align:middle;">
+          <button onclick="clearPhoto()" style="background:rgba(239,68,68,.3);border:none;color:#fca5a5;border-radius:4px;padding:2px 6px;font-size:10px;cursor:pointer;font-family:inherit;">✕</button>
+        </span>
+      </div>
+    </div>
+
+    <!-- Reading input area — compact, no scrolling needed -->
+    <div id="detail-body">
+      <div style="color:#6b7280;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;">New Reading</div>
+      <input type="number" id="f-reading" placeholder="0" inputmode="numeric" autocomplete="off"
+        name="meter-reading" data-lpignore="true" data-1p-ignore data-form-type="other"
+        style="width:100%;background:#fff;border:3px solid #2563eb;border-radius:10px;font-size:32px;font-weight:800;padding:12px 16px;color:#111;font-family:inherit;outline:none;text-align:center;margin-bottom:10px;">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div>
+          <div style="color:#6b7280;font-size:11px;margin-bottom:3px;">New Date</div>
+          <input type="date" id="f-date" onchange="showDateLbl()" style="width:100%;padding:9px;border:1.5px solid #374151;border-radius:8px;font-size:13px;background:#1f2937;color:#fff;font-family:inherit;outline:none;">
+          <div id="f-date-lbl" style="font-size:11px;color:#fbbf24;margin-top:3px;font-weight:700;letter-spacing:.02em;"></div>
+        </div>
+        <div>
+          <div style="color:#6b7280;font-size:11px;margin-bottom:3px;">Remarks</div>
+          <input type="text" id="f-remarks" placeholder="Done / Locked..." autocomplete="off" name="meter-remarks" data-lpignore="true" data-1p-ignore data-form-type="other" style="width:100%;padding:9px;border:1.5px solid #374151;border-radius:8px;font-size:13px;background:#1f2937;color:#fff;font-family:inherit;outline:none;">
+        </div>
+      </div>
+
+      <div class="errmsg" id="serr" style="margin-top:6px;"></div>
+
+      <!-- Spacer so content doesn't hide behind fixed buttons -->
+      <div style="height:72px;"></div>
+    </div>
+
+    <!-- Fixed bottom action buttons -->
+    <div id="detail-btns">
+      <div style="display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:8px;">
+        <button onclick="goPrev()" style="background:#374151;color:#fff;border:none;border-radius:10px;padding:16px 0;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">◀ Prev</button>
+        <button id="save-btn" onclick="saveReading(false)" style="background:#1E7145;color:#fff;border:none;border-radius:10px;padding:16px 0;font-size:17px;font-weight:800;cursor:pointer;font-family:inherit;">Save</button>
+        <button onclick="saveReading(true)" style="background:#1d4ed8;color:#fff;border:none;border-radius:10px;padding:16px 0;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">Next ▶</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="screen" id="screen-success">
+    <div class="swrap">
+      <div class="sico">✅</div>
+      <div class="stitle">Reading saved!</div>
+      <div class="ssub" id="smsg"></div>
+      <button class="btn btnp" onclick="goBack()" style="margin-bottom:10px">← Back to list</button>
+      <button class="btn btng" onclick="switchNav('pending')">View pending</button>
+    </div>
+  </div>
+
+  <!-- PENDING -->
+  <div class="screen" id="screen-pending">
+    <div class="stats">
+      <div class="stat"><div class="statn" id="sp">0</div><div class="statl">Pending sync</div></div>
+      <div class="stat"><div class="statn" id="ss">0</div><div class="statl">Synced</div></div>
+    </div>
+    <div style="padding:0 14px 12px">
+      <button class="btn btnp" onclick="syncAll()" id="syncbtn">🔄 Sync all now</button>
+      <button class="btn btng" onclick="clearSynced()">🧹 Clear synced records</button>
+    </div>
+    <div class="lhdr"><span class="lhdr-t">Saved updates</span></div>
+    <div class="plist" id="plist"></div>
+    <div class="empty" id="pempty" style="display:none"><div style="font-size:44px;margin-bottom:10px">✅</div><div>All synced!</div></div>
+  </div>
+
+</div>
+
+<nav class="nav">
+  <button class="nbtn active" id="nav-home" onclick="switchNav('home')">
+    <span class="nico">🏠</span>Home
+  </button>
+  <button class="nbtn" id="nav-pending" onclick="switchNav('pending')">
+    <span class="nico">🕐</span>Pending
+    <span class="ndot" id="ndot"></span>
+  </button>
+</nav>
+</div>
+
+<script>
+const API = "https://unbilled-server.onrender.com/api/legacy";
+const CK = 'ub_cache', CT = 'ub_ts', TTL = 30*60*1000;
+
+let pending = [];
+let allAccounts = [], filtered = [], page = 1, pageSize = 40;
+let currentAcct = null, photoB64 = null;
+let hasExistingPhoto = false; // true when this account already has a photo saved in the sheet
+let photoNotRequired = false; // photo on file OR the reading was already saved → don't demand a new one
+let selectedArea = localStorage.getItem('ub_area') || 'all';
+let updatedSet = new Set();
+let inFlight = new Set(); // update ids currently being POSTed — prevents duplicate sends
+
+// ── Session token helpers ──
+let currentUser = null;
+function tok(){ return (currentUser && currentUser.token) ? currentUser.token : ''; }
+function authUrl(qs){ return API + qs + '&token=' + encodeURIComponent(tok()); }
+function isAuthError(d){ return !!(d && d.error === 'auth'); }
+
+// The cached account list is customer PII — names, addresses, account and meter
+// numbers — sitting unencrypted on a phone that can be lost, shared or sold. It
+// must not outlive the session that was authorised to see it.
+// Unsynced readings in IndexedDB are deliberately NOT touched: they are the
+// worker's own unsaved work, and they sync once he signs back in.
+function wipeCachedData(){
+  try {
+    localStorage.removeItem(CK);            // the account list
+    localStorage.removeItem(CT);            // its timestamp
+    localStorage.removeItem('ub_session');
+    localStorage.removeItem('ub_session_at');
+  } catch(e) {}
+  allAccounts = []; filtered = []; currentUser = null;
+}
+
+function forceRelogin(){
+  // Server session expired. Unsynced readings stay safe in IndexedDB —
+  // they'll sync automatically after the worker signs in again.
+  wipeCachedData();
+  showBar('Session expired — sign in again (your readings are safe)','offline');
+  show('login');
+}
+
+function makeId() {
+  return Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+}
+
+// ── IndexedDB for persistent offline readings ──
+let db = null;
+const DB_NAME = 'UnbilledDB', DB_VER = 2, STORE = 'pending';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      const tx = e.target.transaction;
+      if (d.objectStoreNames.contains(STORE)) {
+        // v1 → v2 migration: old store was keyed by savedAt (could collide);
+        // new store is keyed by a unique 'id'. Carry old records across.
+        const oldStore = tx.objectStore(STORE);
+        const g = oldStore.getAll();
+        g.onsuccess = () => {
+          const recs = g.result || [];
+          d.deleteObjectStore(STORE);
+          const ns = d.createObjectStore(STORE, { keyPath: 'id' });
+          recs.forEach((r, idx) => {
+            if (!r.id) r.id = Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 7);
+            if (!r.ts) r.ts = Date.now();
+            ns.put(r);
+          });
+        };
+      } else {
+        d.createObjectStore(STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = e => { db = e.target.result; resolve(db); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbGetAll() {
+  if (!db) return [];
+  return new Promise((resolve) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => resolve([]);
+  });
+}
+
+async function dbPut(item) {
+  if (!db) return;
+  return new Promise((resolve) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(item);
+    tx.oncomplete = resolve;
+  });
+}
+
+async function dbDelete(id) {
+  if (!db) return;
+  return new Promise((resolve) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(id);
+    tx.oncomplete = resolve;
+  });
+}
+
+async function dbClear() {
+  if (!db) return;
+  return new Promise((resolve) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).clear();
+    tx.oncomplete = resolve;
+  });
+}
+
+async function loadPending() {
+  pending = await dbGetAll();
+  // Auto-purge synced records older than 3 days (photos already uploaded)
+  const cutoff = Date.now() - 3*24*60*60*1000;
+  const stale = pending.filter(p => p.synced && !p.photo && (p.ts || 0) < cutoff);
+  for (const s of stale) { try { await dbDelete(s.id); } catch(e){} }
+  if (stale.length) pending = pending.filter(p => !stale.includes(p));
+  updatedSet = new Set(pending.filter(p => p.synced).map(p => String(p.acno)));
+  updateDot();
+  updateTodayChip();
+}
+
+function updateTodayChip() {
+  const el = document.getElementById('today-chip');
+  if (!el) return;
+  const today = new Date().toISOString().split('T')[0];
+  const n = new Set(pending.filter(p => p.dateKey === today).map(p => String(p.acno))).size;
+  el.textContent = '✍ ' + n + ' today';
+}
+
+function showBar(msg, type) {
+  const b = document.getElementById('sbar');
+  b.className = 'sbar show ' + type;
+  b.textContent = msg;
+  b.onclick = () => { b.className = 'sbar'; };   // tap to dismiss immediately
+  b.title = 'Tap to dismiss';
+  clearTimeout(showBar._t);
+  // Errors linger a bit longer than confirmations, but they DO go away.
+  const ms = (type === 'ok') ? 3000 : 8000;
+  showBar._t = setTimeout(() => { b.className = 'sbar'; }, ms);
+}
+
+function show(id) {
+  if (!currentUser && id !== 'login') { id = 'login'; }
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.remove('active');
+    s.style.display = 'none';
+  });
+  const el = document.getElementById('screen-' + id);
+  el.classList.add('active');
+  el.style.display = (id === 'detail') ? 'flex' : 'block';
+
+  // Once signed in, disable the login fields. A live password input left in
+  // the DOM makes Chrome show its autofill bar (key / card / address chips)
+  // above the keyboard on every other screen.
+  const lu = document.getElementById('l-user'), lp = document.getElementById('l-pass');
+  const onLogin = (id === 'login');
+  if (lu) lu.disabled = !onLogin;
+  if (lp) lp.disabled = !onLogin;
+
+  const nav = document.querySelector('.nav');
+  if (id === 'detail') {
+    nav.style.display = 'none';
+    document.querySelector('.content').style.paddingBottom = '0';
+    setTimeout(updateBtnPosition, 50);
+  } else {
+    nav.style.display = 'flex';
+    document.querySelector('.content').style.paddingBottom = '72px';
+  }
+}
+
+function switchNav(tab) {
+  if (!currentUser) { show('login'); return; }
+  document.querySelectorAll('.nbtn').forEach(b=>b.classList.remove('active'));
+  const nb = document.getElementById('nav-'+tab);
+  if (nb) nb.classList.add('active');
+  if (tab==='pending') { renderPending(); show('pending'); }
+  else if (tab==='home') show('home');
+}
+
+function goBack() {
+  if (!currentUser) { show('login'); return; }
+  clearPhoto(); show('home'); switchNav('home');
+}
+
+function goPrev() {
+  const currentIdx = filtered.findIndex(a=>String(a.acno)===String(currentAcct.acno));
+  if (currentIdx > 0) {
+    const prev = filtered[currentIdx - 1];
+    currentAcct = prev;
+    fillDetail(prev, true);
+    const prevUpdate = pending.slice().reverse().find(p=>String(p.acno)===String(prev.acno));
+    if (prevUpdate) {
+      document.getElementById('f-reading').value = prevUpdate.newReading || '';
+      document.getElementById('f-date').value = prevUpdate.newDate || new Date().toISOString().split('T')[0];
+      document.getElementById('f-remarks').value = prevUpdate.remarks || '';
+    }
+  } else {
+    showBar('Already at first account','offline');
+  }
+}
+
+function showAreaScreen() { show('area'); }
+
+let selectedAreaTemp = selectedArea;
+
+// The areas this worker is allowed to load: column F (multi) if set, else
+// column D (single). The server enforces this too — this just keeps the
+// dropdown honest.
+function myAreas() {
+  const multi = (currentUser && currentUser.areas) ? currentUser.areas.filter(Boolean) : [];
+  if (multi.length) return multi.map(String).sort((a, b) => Number(a) - Number(b));
+  const single = String((currentUser && currentUser.area) || '').trim();
+  return (single && single.toLowerCase() !== 'all') ? [single] : [];
+}
+
+function loadAreas() {
+  const sel = document.getElementById('area-select');
+  const mine = myAreas();
+
+  if (!mine.length) {
+    // No area assigned (or an admin account) — fall back to the full list
+    sel.innerHTML = '<option value="all">All Areas</option>';
+    for (let i = 1; i <= 24; i++) {
+      const opt = document.createElement('option');
+      opt.value = i; opt.textContent = 'Area ' + i;
+      if (String(i) === String(selectedArea)) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    if (selectedArea === 'all') sel.value = 'all';
+    return;
+  }
+
+  // Only the assigned areas. "All my areas" only makes sense with 2+.
+  let html = (mine.length > 1) ? '<option value="all">All My Areas</option>' : '';
+  mine.forEach(a => {
+    html += '<option value="' + a + '">Area ' + a + '</option>';
+  });
+  sel.innerHTML = html;
+
+  // Keep a valid selection: stored area must be one of mine
+  if (mine.indexOf(String(selectedArea)) !== -1) sel.value = String(selectedArea);
+  else if (mine.length > 1 && selectedArea === 'all') sel.value = 'all';
+  else { sel.value = mine[0]; selectedArea = mine[0]; }
+  localStorage.setItem('ub_area', selectedArea);
+
+  // Chip shows what they're actually assigned
+  const chip = document.getElementById('area-chip');
+  if (chip) chip.textContent = (mine.length > 1)
+    ? 'Areas: ' + mine.join(', ')
+    : 'Area: ' + mine[0];
+}
+
+async function loadSelectedArea() {
+  selectedArea = document.getElementById('area-select').value;
+  localStorage.setItem('ub_area', selectedArea);
+  const btn = document.getElementById('area-load-btn');
+  btn.innerHTML = '<span class="spin"></span> Loading...';
+  btn.disabled = true;
+  localStorage.removeItem(CK); localStorage.removeItem(CT);
+  await loadAll(true);
+  btn.innerHTML = 'Load Accounts →';
+  btn.disabled = false;
+  document.getElementById('area-chip').textContent = selectedArea==='all' ? 'Area: All' : 'Area: '+selectedArea;
+  show('home');
+  switchNav('home');
+}
+
+async function hardRefresh() {
+  const btn = document.getElementById('rfbtn');
+  btn.textContent = '⏳'; btn.disabled = true;
+  localStorage.removeItem(CK); localStorage.removeItem(CT);
+  await loadAll(true);
+  btn.textContent = '🔄'; btn.disabled = false;
+  showBar('Refreshed ✓','ok');
+}
+
+async function loadAll(force) {
+  const el = document.getElementById('alist');
+  if (!force) {
+    const c = localStorage.getItem(CK), ts = parseInt(localStorage.getItem(CT)||'0');
+    if (c && (Date.now()-ts)<TTL) {
+      allAccounts = JSON.parse(c).sort((a,b)=>Number(a.row)-Number(b.row)); // keep sheet row order; locked shown read-only
+      filtered = allAccounts; // consistent with network path — show all, pending first in count
+      renderList();
+      const pc = allAccounts.filter(a=>a.status==='pending').length;
+      document.getElementById('lcount').textContent = pc+' pending / '+allAccounts.length+' total';
+      document.getElementById('ltitle').textContent = 'All Accounts';
+      // Always verify against sheet in background — catches cases where sheet write failed
+      bgRefresh();
+      return;
+    }
+  }
+  el.innerHTML = '<div class="loading">⏳ Loading accounts...<br><small>May take 15–20 seconds on first load</small></div>';
+  const areaParam = selectedArea!=='all' ? '&area='+encodeURIComponent(selectedArea) : '';
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(()=>ctrl.abort(), 20000);
+    const res = await fetch(authUrl('?action=all'+areaParam), {signal:ctrl.signal});
+    clearTimeout(tid);
+    const data = await res.json();
+    if (isAuthError(data)) { forceRelogin(); return; }
+    allAccounts = (data.accounts || [])
+      .filter(a => !a.locked)                               // field staff never see locked accounts
+      .sort((a, b) => Number(a.row) - Number(b.row));
+    localStorage.setItem(CK, JSON.stringify(allAccounts));
+    localStorage.setItem(CT, Date.now()+'');
+    filtered = allAccounts;
+    renderList();
+    const pendingCount = allAccounts.filter(a=>a.status==='pending').length;
+    document.getElementById('lcount').textContent = pendingCount+' pending / '+allAccounts.length+' total';
+    document.getElementById('ltitle').textContent = 'All Accounts';
+  } catch(e) {
+    const c = localStorage.getItem(CK);
+    if (c) {
+      allAccounts = JSON.parse(c).sort((a,b)=>Number(a.row)-Number(b.row)); // keep sheet row order; locked shown read-only
+      filtered = allAccounts;
+      renderList();
+      const pc2 = allAccounts.filter(a=>a.status==='pending').length;
+      document.getElementById('lcount').textContent = pc2+' pending / '+allAccounts.length+' total (cached)';
+      showBar('Showing cached data — tap 🔄 to refresh','offline');
+    } else {
+      el.innerHTML = `<div class="empty"><div style="font-size:44px;margin-bottom:10px">📡</div>
+        <div style="margin-bottom:16px">Could not connect.<br>Check internet and try again.</div>
+        <button class="btn btnp" onclick="loadAll(true)" style="width:auto;padding:10px 24px;margin:0 auto;">Try again</button></div>`;
+    }
+  }
+}
+
+async function bgRefresh() {
+  try {
+    const areaParam = selectedArea!=='all'?'&area='+encodeURIComponent(selectedArea):'';
+    const res = await fetch(authUrl('?action=all'+areaParam));
+    const data = await res.json();
+    if (isAuthError(data)) { forceRelogin(); return; }
+    if (data.accounts) {
+      allAccounts = data.accounts.filter(a=>!a.locked).sort((a,b)=>Number(a.row)-Number(b.row)); // exclude locked
+      localStorage.setItem(CK, JSON.stringify(allAccounts));
+      localStorage.setItem(CT, Date.now()+'');
+      // Reapply the current search filter so `filtered` points at fresh data,
+      // then restore pagination so "Load more" state isn't lost.
+      const pg = page;
+      filterList((document.getElementById('sinput').value || '').trim());
+      page = pg;
+      renderList();
+    }
+  } catch(e) {}
+}
+
+function renderList() {
+  const el = document.getElementById('alist');
+  const slice = filtered.slice(0, page*pageSize);
+  if (!filtered.length) {
+    el.innerHTML='<div class="empty"><div style="font-size:44px;margin-bottom:10px">🎉</div><div>All accounts have readings!</div></div>';
+    document.getElementById('lmbtn').style.display='none';
+    return;
+  }
+  el.innerHTML = slice.map(a => {
+    // Green only if sheet confirms done OR locally synced to sheet
+    const syncedLocally = updatedSet.has(String(a.acno)); // synced:true entries only
+    const sheetDone = a.status === 'done';
+    const isGreen = syncedLocally || sheetDone;
+    // Show orange "Saving..." tag if saved locally but not yet synced to sheet
+    const hasPendingLocal = pending.some(p => String(p.acno) === String(a.acno) && !p.synced);
+    const cls = isGreen ? 'updated' : '';
+    let tag = '';
+    if (a.locked) {
+      tag = '<span class="utag" style="background:#f3f4f6;color:#6b7280;">\u{1F512} Locked</span>';
+    } else if (isGreen) {
+      tag = '<span class="utag">✓ Updated</span>';
+    } else if (hasPendingLocal) {
+      tag = '<span class="utag" style="background:#fef3c7;color:#92400e;">⏳ Saving...</span>';
+    }
+    return `<div class="acard ${cls}" onclick="openAccount('${a.acno}')">
+      <div class="ainfo">
+        <div class="aacno">ACNO ${a.acno}${tag}</div>
+        <div class="ameter">Meter: ${a.meter||'—'}</div>
+        <div class="aaddr">${a.address||'—'}</div>
+        <div class="ardate">R_DATE: ${a.rdate||'—'}</div>
+      </div>
+      <span class="arr">›</span>
+    </div>`;
+  }).join('');
+  document.getElementById('lmbtn').style.display = slice.length<filtered.length?'block':'none';
+}
+
+function loadMore() { page++; renderList(); }
+
+function filterList(val) {
+  page=1;
+  if (!val) {
+    filtered = allAccounts;
+    document.getElementById('ltitle').textContent='All Accounts';
+    const pc3 = allAccounts.filter(a=>a.status==='pending').length;
+    document.getElementById('lcount').textContent=pc3+' pending / '+allAccounts.length+' total';
+  } else {
+    filtered = allAccounts.filter(a=>
+      String(a.acno).includes(val)||
+      String(a.meter||'').includes(val)||
+      (a.address||'').toLowerCase().includes(val.toLowerCase())
+    );
+    document.getElementById('ltitle').textContent='Search Results';
+    document.getElementById('lcount').textContent=filtered.length+' found';
+  }
+  renderList();
+}
+
+function quickSearch() {
+  const val = document.getElementById('sinput').value.trim();
+  if (!val) return;
+  const a = allAccounts.find(x=>String(x.acno)===val);
+  if (a) { fillDetail(a); currentAcct=a; show('detail'); return; }
+  filterList(val);
+}
+
+async function openAccount(acno) {
+  const a = allAccounts.find(x=>String(x.acno)===String(acno));
+  if (a) { currentAcct=a; fillDetail(a); show('detail'); return; }
+  showBar('Loading...','syncing');
+  try {
+    const res = await fetch(authUrl('?action=search&acno='+encodeURIComponent(acno)));
+    const data = await res.json();
+    if (isAuthError(data)) { forceRelogin(); return; }
+    document.getElementById('sbar').className='sbar';
+    if (data.found) {
+      if (data.locked) { showBar('\u{1F512} ACNO '+acno+' is locked \u2014 previous month is closed','offline'); return; }
+      currentAcct=data; fillDetail(data); show('detail');
+    }
+  } catch(e) { showBar('Could not load account','offline'); }
+}
+
+// <input type="date"> renders in the BROWSER's locale (a US phone shows
+// 07/12/2026 for 12 July), which a day-first reader will misread. Show the
+// date explicitly in dd-mm-yyyy so there is no ambiguity.
+function showDateLbl() {
+  const el = document.getElementById('f-date');
+  const lbl = document.getElementById('f-date-lbl');
+  if (!el || !lbl) return;
+  const v = String(el.value || '');           // always ISO yyyy-mm-dd
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  lbl.textContent = m ? (m[3] + '-' + m[2] + '-' + m[1]) : '';
+}
+
+// The sheet sends dd/MM/yyyy; <input type="date"> needs yyyy-MM-dd.
+function normDateInput_(v) {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);           // already ISO
+  if (m) return m[1] + '-' + ('0'+m[2]).slice(-2) + '-' + ('0'+m[3]).slice(-2);
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);   // dd/MM/yyyy
+  if (m) {
+    let y = m[3]; if (y.length === 2) y = '20' + y;
+    return y + '-' + ('0'+m[2]).slice(-2) + '-' + ('0'+m[1]).slice(-2);
+  }
+  return '';
+}
+
+function fillDetail(d, keepKeyboard) {
+  document.getElementById('d-acno').textContent=d.acno;
+  document.getElementById('d-area').textContent='Area '+(d.area||'—');
+  document.getElementById('d-meter').textContent=d.meter||'—';
+  document.getElementById('d-addr').textContent=d.address||'—';
+  document.getElementById('d-prev').textContent=d.prevReading||'—';
+  document.getElementById('d-pdate').textContent=d.prevDate||'—';
+  document.getElementById('d-rdate').textContent=d.rdate||'—';
+  const b=document.getElementById('d-status');
+  b.textContent=d.locked?'\u{1F512} Locked':(d.status==='done'?'Done':'Pending');
+  b.className='badge '+(d.locked?'bp':(d.status==='done'?'bd':'bp'));
+  const inp = document.getElementById('f-reading');
+  // Show the reading that was already entered (locked or simply saved) instead
+  // of a blank box; only a genuinely untaken account starts empty.
+  inp.value = String(d.newReading ?? '').trim();
+  document.getElementById('f-date').value = d.newDate
+    ? normDateInput_(d.newDate)
+    : new Date().toISOString().split('T')[0];
+  document.getElementById('f-remarks').value=d.remarks||'';
+  showDateLbl();
+  document.getElementById('serr').style.display='none';
+  const sb = document.getElementById('sbar');
+  if (sb) sb.className = 'sbar'; // don't carry a stale error onto the next account
+  clearPhoto();
+
+  // A photo is only demanded for a FRESH reading. If this account already has
+  // a photo on file, OR its reading was already saved (synced to the sheet, or
+  // still queued locally), don't make the worker shoot it again.
+  hasExistingPhoto = !!String(d.photoUrl || '').trim();
+  const readingSaved =
+    d.status === 'done' ||
+    String(d.newReading ?? '').trim() !== '' ||
+    updatedSet.has(String(d.acno)) ||
+    pending.some(p => String(p.acno) === String(d.acno));
+  photoNotRequired = hasExistingPhoto || readingSaved;
+
+  // A locked account is finished and gone to billing. Show what was entered,
+  // read-only — never ask for a photo (it may well have been purged from Drive
+  // after export) and never allow a change.
+  const isLocked = !!d.locked;
+  photoNotRequired = isLocked || hasExistingPhoto || readingSaved;
+
+  const inpR = document.getElementById('f-reading');
+  const inpD = document.getElementById('f-date');
+  const inpM = document.getElementById('f-remarks');
+  [inpR, inpD, inpM].forEach(el => { if (el) { el.disabled = isLocked; el.style.opacity = isLocked ? '.75' : '1'; } });
+
+  const saveBtn = document.querySelector('#detail-btns .btn-save') || document.getElementById('save-btn');
+  if (saveBtn) {
+    saveBtn.disabled = isLocked;
+    saveBtn.style.opacity = isLocked ? '.4' : '1';
+    saveBtn.textContent = isLocked ? '🔒 Locked' : 'Save';
+  }
+
+  const gbtn = document.getElementById('gallery-btn');
+  if (gbtn) gbtn.style.display = isLocked ? 'none' : '';   // no photo work on a locked account
+  const pbtn = document.getElementById('photo-btn');
+  if (pbtn) {
+    if (isLocked) {
+      pbtn.style.display = 'none'; // nothing to add — the account is closed
+    } else {
+      pbtn.style.display = '';
+      if (photoNotRequired) {
+        pbtn.textContent = '📷 Photo ✓';
+        pbtn.style.background = '#16a34a';
+        pbtn.style.color = '#fff';
+        pbtn.title = hasExistingPhoto
+          ? 'A photo is already saved for this account. Tap to replace it.'
+          : 'This reading is already saved — no new photo needed. Tap to add one anyway.';
+      } else {
+        pbtn.textContent = '📷 Photo *';
+        pbtn.style.background = '#fbbf24';
+        pbtn.style.color = '#1f2937';
+        pbtn.title = 'A meter photo is required.';
+      }
+    }
+  }
+  if (keepKeyboard) {
+    // Moving to the next account: keep the keyboard up and the view still.
+    // preventScroll stops the page jumping/re-laying-out under the keyboard.
+    inp.focus({ preventScroll: true });
+    inp.select();
+  } else {
+    // First open — focus after a short delay to let the screen render
+    setTimeout(()=>{ inp.focus({ preventScroll: true }); inp.click(); }, 300);
+  }
+}
+
+async function saveReading(goNext) {
+  const reading=document.getElementById('f-reading').value.trim();
+  const date=document.getElementById('f-date').value;
+  const remarks=document.getElementById('f-remarks').value.trim();
+  const err=document.getElementById('serr');
+  err.style.display='none';
+
+  // If navigating without entering anything, just move to next/prev account
+  if (!reading && !remarks) {
+    if (photoB64) {
+      err.textContent='You took a photo — enter the reading first, or tap \u2715 next to the photo to discard it.';
+      err.style.display='block';
+      return;
+    }
+    if (goNext) {
+      const currentIdx = filtered.findIndex(a=>String(a.acno)===String(currentAcct.acno));
+      const nextAcct = filtered[currentIdx + 1];
+      if (nextAcct) { currentAcct = nextAcct; fillDetail(nextAcct, true); }
+      else showBar('Already at last account','offline');
+    } else {
+      err.textContent='Please enter a reading or remarks.';
+      err.style.display='block';
+    }
+    return;
+  }
+
+  if (currentAcct && currentAcct.locked) {
+    // Nothing to save on a locked account — but the worker should still be able
+    // to page through the list, so Next just moves on.
+    if (goNext) {
+      const ci = filtered.findIndex(a=>String(a.acno)===String(currentAcct.acno));
+      const nx = filtered[ci + 1];
+      if (nx) { currentAcct = nx; fillDetail(nx, true); }
+      else showBar('Already at last account','offline');
+      return;
+    }
+    err.textContent='\u{1F512} ACNO '+currentAcct.acno+' is locked (sent to billing) — it can no longer be changed.';
+    err.style.display='block';
+    return;
+  }
+
+  // ── Meter photo is MANDATORY for every reading ──
+  // ...unless this account already has one saved (don't re-shoot it).
+  if (reading !== '' && !photoB64 && !photoNotRequired) {
+    err.innerHTML='\u{1F4F7} A meter photo is required. Tap <b>📷 Photo</b>, then Save.';
+    err.style.display='block';
+    const pb = document.getElementById('photo-btn');
+    if (pb) { pb.classList.add('need-photo'); setTimeout(()=>pb.classList.remove('need-photo'), 2000); }
+    return;
+  }
+
+  // ── Sanity check: catch typos before they hit the sheet ──
+  if (reading !== '') {
+    const prev = parseFloat(currentAcct.prevReading);
+    const cur = parseFloat(reading);
+    if (!isNaN(prev) && !isNaN(cur)) {
+      const diff = cur - prev;
+      if (diff < 0) {
+        if (!confirm('⚠ New reading (' + cur + ') is LOWER than previous (' + prev + ').\n\nSave anyway? (OK if meter was replaced/rolled over)')) return;
+      } else if (diff > 5000) {
+        if (!confirm('⚠ Very high consumption: ' + diff + ' units since last reading.\n\nSave anyway?')) return;
+      }
+    }
+  }
+
+  // Capture photo now — it belongs to this account's update
+  const capturedPhotoB64 = photoB64;
+  photoB64 = null;
+  clearPhoto();
+
+  const update={
+    action:'update',acno:currentAcct.acno,row:currentAcct.row,
+    newReading:reading,newDate:date,remarks:remarks,
+    worker:document.getElementById('wlabel').textContent,
+    savedAt:new Date().toLocaleString(),
+    id:makeId(),                 // unique key — no more same-second collisions
+    ts:Date.now(),
+    dateKey:new Date().toISOString().split('T')[0],
+    photo:capturedPhotoB64||null, // stored offline too, uploaded on sync
+    synced:false
+  };
+
+  pending.push(update);
+  await dbPut(update);
+  // Don't add to updatedSet yet — only after confirmed sheet sync
+  updateDot();
+  updateTodayChip();
+
+  const currentIdx = filtered.findIndex(a=>String(a.acno)===String(update.acno));
+  const nextAcct = goNext ? filtered[currentIdx + 1] : null;
+
+  renderList();
+
+  if (goNext && nextAcct) {
+    currentAcct = nextAcct;
+    fillDetail(nextAcct, true);
+    const existingUpdate = pending.slice().reverse().find(p=>String(p.acno)===String(nextAcct.acno));
+    if (existingUpdate) {
+      document.getElementById('f-reading').value = existingUpdate.newReading || '';
+      document.getElementById('f-date').value = existingUpdate.newDate || new Date().toISOString().split('T')[0];
+      document.getElementById('f-remarks').value = existingUpdate.remarks || '';
+    }
+    show('detail');
+    showBar('ACNO '+update.acno+' saved ✓','ok');
+  } else {
+    show('home');
+    switchNav('home');
+    showBar('ACNO '+update.acno+' saved — syncing in background...','syncing');
+  }
+
+  if (navigator.onLine) {
+    inFlight.add(update.id);
+    fetch(API, {method:'POST', body:JSON.stringify(Object.assign({}, update, {token: tok()}))})
+      .then(r=>r.json())
+      .then(async data=>{
+        if (isAuthError(data)) { forceRelogin(); return; }
+        if (data.error === 'locked') {
+          update.synced = true; update.rejected = true; update.photo = null; // stop retrying — sheet refused it
+          dbPut(update).catch(()=>{});
+          updateDot();
+          showBar('\u{1F512} ACNO '+update.acno+' is LOCKED — reading NOT saved','offline');
+          return;
+        }
+        if (data.success) {
+          update.synced=true;
+          updatedSet.add(String(update.acno));
+          const ci=allAccounts.findIndex(a=>String(a.acno)===String(update.acno));
+          if (ci>=0){allAccounts[ci].status='done';allAccounts[ci].newDate=date;}
+          localStorage.setItem(CK,JSON.stringify(allAccounts));
+          updateDot();
+          renderList();
+          showBar('ACNO '+update.acno+' synced ✓','ok');
+          if (update.photo) {
+            const ok = await uploadPhotoToSheet(update.photo, update.acno, update.newDate, update.worker);
+            if (ok) update.photo = null; // uploaded — drop from local storage
+          }
+          dbPut(update).catch(()=>{});
+        }
+      })
+      .catch(()=>{ showBar('Saved locally — will sync when connected','offline'); })
+      .finally(()=>{ inFlight.delete(update.id); });
+  } else {
+    showBar('Offline — will sync when connected','offline');
+  }
+}
+
+async function uploadPhotoToSheet(b64, acno, date, worker) {
+  try {
+    const res = await fetch(API, {method:'POST', body:JSON.stringify({
+      action:'upload_photo', acno: acno, date: date, photo: b64, worker: worker, token: tok()
+    })});
+    const data = await res.json();
+    if (isAuthError(data)) { forceRelogin(); return false; }
+    if (data.success) { showBar('Photo saved ✓ (ACNO '+acno+')','ok'); return true; }
+    showBar('Photo failed: '+(data.error||data.message||'unknown')+' — will retry on sync','offline');
+  } catch(e) {
+    showBar('Photo upload failed — will retry on next sync','offline');
+  }
+  return false;
+}
+
+async function syncAll() {
+  const unsynced = pending.filter(p => !p.synced);
+  if (!unsynced.length) { showBar('All synced ✓', 'ok'); return; }
+  if (!navigator.onLine) { showBar('No internet', 'offline'); return; }
+  const btn = document.getElementById('syncbtn');
+  if (btn) { btn.innerHTML = '<span class="spin"></span> Syncing...'; btn.disabled = true; }
+  showBar('Syncing ' + unsynced.length + ' updates...', 'syncing');
+  let done = 0;
+  for (const u of unsynced) {
+    if (inFlight.has(u.id)) continue; // already being sent by saveReading — skip
+    inFlight.add(u.id);
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 10000); // 10s per request max
+      const r = await fetch(API, { method: 'POST', body: JSON.stringify(Object.assign({}, u, {token: tok()})), signal: ctrl.signal });
+      clearTimeout(tid);
+      const d = await r.json();
+      if (isAuthError(d)) { inFlight.delete(u.id); forceRelogin(); break; }
+      if (d.error === 'locked') {
+        u.synced = true; u.rejected = true; u.photo = null; // sheet refused it — don't retry
+        await dbPut(u);
+        inFlight.delete(u.id);
+        continue;
+      }
+      if (d.success) {
+        u.synced = true;
+        updatedSet.add(String(u.acno));
+        const ci = allAccounts.findIndex(a => String(a.acno) === String(u.acno));
+        if (ci >= 0) { allAccounts[ci].status = 'done'; allAccounts[ci].newDate = u.newDate; }
+        if (u.photo) {
+          const ok = await uploadPhotoToSheet(u.photo, u.acno, u.newDate, u.worker);
+          if (ok) u.photo = null;
+        }
+        await dbPut(u);
+        done++;
+      }
+    } catch(e) { /* skip failed, try next */ }
+    inFlight.delete(u.id);
+  }
+  // Retry photos whose reading synced earlier but whose upload failed
+  const photoRetries = pending.filter(p => p.synced && p.photo);
+  for (const u of photoRetries) {
+    const ok = await uploadPhotoToSheet(u.photo, u.acno, u.newDate, u.worker);
+    if (ok) { u.photo = null; await dbPut(u); }
+  }
+  localStorage.setItem(CK, JSON.stringify(allAccounts));
+  updateDot(); renderPending(); renderList();
+  if (btn) { btn.innerHTML = '🔄 Sync all now'; btn.disabled = false; }
+  showBar('Synced ' + done + ' of ' + unsynced.length + ' ✓', 'ok');
+}
+
+async function clearSynced() {
+  const s = pending.filter(p => p.synced);
+  if (!s.length) { showBar('Nothing to clear', 'ok'); return; }
+  if (!confirm('Remove ' + s.length + ' synced record(s) from this device?\n\nSheet data is NOT affected.')) return;
+  for (const x of s) { try { await dbDelete(x.id); } catch(e){} }
+  pending = pending.filter(p => !p.synced);
+  renderPending(); updateDot(); updateTodayChip();
+  showBar('Cleared ✓', 'ok');
+}
+
+function renderPending() {
+  const list=document.getElementById('plist');
+  const empty=document.getElementById('pempty');
+  document.getElementById('sp').textContent=pending.filter(p=>!p.synced).length;
+  document.getElementById('ss').textContent=pending.filter(p=>p.synced).length;
+  if (!pending.length){list.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  list.innerHTML=pending.slice().reverse().map(p=>`
+    <div class="acard${p.synced?' updated':''}">
+      <div class="ainfo">
+        <div class="aacno">ACNO ${p.acno}${p.synced?'<span class="utag">✓ Synced</span>':''}</div>
+        <div class="ardate">${p.newReading?'Reading: '+p.newReading+' · ':''}${p.savedAt}${p.photo?' · 📷 photo pending':''}</div>
+      </div>
+      <span class="badge ${p.rejected?'bp':(p.synced?'bd':'bp')}">${p.rejected?'\u{1F512} Rejected':(p.synced?'Synced':'Pending')}</span>
+    </div>`).join('');
+}
+
+function updateDot(){document.getElementById('ndot').style.display=pending.some(p=>!p.synced)?'block':'none';}
+
+function previewPhoto(input) {
+  const file=input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      const canvas=document.createElement('canvas');
+      const maxW=1024, maxH=1024;
+      let w=img.width, h=img.height;
+      if (w>maxW){h=Math.round(h*maxW/w);w=maxW;}
+      if (h>maxH){w=Math.round(w*maxH/h);h=maxH;}
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const compressed=canvas.toDataURL('image/jpeg',0.7);
+      photoB64=compressed.split(',')[1];
+      document.getElementById('pimg').src=compressed;
+      document.getElementById('pp').style.display='inline-flex';
+      document.getElementById('pbw').style.display='none';
+
+      // Auto-download to device with ACNO + date filename
+      const acno = currentAcct ? currentAcct.acno : 'unknown';
+      const date = document.getElementById('f-date').value || new Date().toISOString().split('T')[0];
+      const filename = 'ACNO_' + acno + '_' + date + '.jpg';
+      const a = document.createElement('a');
+      a.href = compressed;
+      a.download = filename;
+      a.click();
+      showBar('Photo saved to Downloads: ' + filename, 'ok');
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+  input.value = ''; // allow re-picking the same file
+}
+
+function clearPhoto(){
+  photoB64=null;
+  // Reset BOTH inputs — a file input won't fire change if you pick the same
+  // file twice without clearing it first.
+  ['pinput','ginput'].forEach(id => { const i=document.getElementById(id); if(i) i.value=''; });
+  const pp=document.getElementById('pp');if(pp){pp.style.display='none';}
+  const pb=document.getElementById('pbw');if(pb)pb.style.display='inline-flex';
+}
+
+function changeName(){
+  const current = document.getElementById('wlabel').textContent;
+  const n = window.prompt('Your name:', current);
+  if (n && n.trim()) {
+    localStorage.setItem('wname', n.trim());
+    document.getElementById('wlabel').textContent = n.trim();
+  }
+}
+
+// ── Keep action buttons above the keyboard on Android ──
+function updateBtnPosition() {
+  const btns = document.getElementById('detail-btns');
+  if (!btns) return;
+  if (!document.getElementById('screen-detail').classList.contains('active')) return;
+  if (window.visualViewport) {
+    // keyboardHeight = how much the keyboard has pushed up the viewport
+    const keyboardHeight = window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop;
+    btns.style.bottom = Math.max(0, keyboardHeight) + 'px';
+  } else {
+    btns.style.bottom = '0px';
+  }
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', updateBtnPosition);
+  window.visualViewport.addEventListener('scroll', updateBtnPosition);
+}
+
+// Block F5, Ctrl+R, Ctrl+Shift+R
+document.addEventListener('keydown', e => {
+  if (e.key === 'F5' || (e.ctrlKey && e.key === 'r') || (e.ctrlKey && e.shiftKey && e.key === 'R')) {
+    e.preventDefault();
+  }
+});
+
+// ── LOGIN ──
+
+async function doLogin() {
+  const username = document.getElementById('l-user').value.trim();
+  const password = document.getElementById('l-pass').value.trim();
+  const err = document.getElementById('login-err');
+  const btn = document.getElementById('login-btn');
+  err.style.display = 'none';
+  if (!username || !password) { err.textContent = 'Please enter username and password.'; err.style.display = 'block'; return; }
+  btn.textContent = 'Signing in...'; btn.disabled = true;
+  try {
+    // POST so credentials never appear in a URL or in server request logs
+    const res = await fetch(API, { method:'POST', body: JSON.stringify({ action:'login', username, password }) });
+    const data = await res.json();
+    if (data.success) {
+      currentUser = data.user || {};
+      currentUser.token = data.token;
+      localStorage.setItem('ub_session', JSON.stringify(currentUser));
+      localStorage.setItem('ub_session_at', String(Date.now()));
+      selectedArea = String(currentUser.area);
+      localStorage.setItem('ub_area', selectedArea);
+      document.getElementById('wlabel').textContent = currentUser.name || username;
+      document.getElementById('area-chip').textContent = 'Area: ' + selectedArea;
+      loadAreas();
+      await loadAll(true);
+      show('home');
+      switchNav('home');
+      if (pending.some(p=>!p.synced)) syncAll(); // readings saved before session expired
+    } else {
+      err.textContent = data.message || 'Invalid username or password.';
+      err.style.display = 'block';
+    }
+  } catch(e) {
+    err.textContent = 'Could not connect. Check internet.';
+    err.style.display = 'block';
+  }
+  btn.textContent = 'Sign In'; btn.disabled = false;
+}
+
+function doLogout() {
+  if (!confirm('Log out?')) return;
+  const unsyncedCount = pending.filter(p=>!p.synced).length;
+  if (unsyncedCount > 0 && !confirm('⚠ You have ' + unsyncedCount + ' UNSYNCED reading(s) that will be DELETED.\n\nLog out anyway?')) return;
+  wipeCachedData();
+  localStorage.removeItem('ub_area');
+  dbClear();
+  currentUser = null; pending = []; updatedSet = new Set(); allAccounts = []; filtered = [];
+  updateDot();
+  document.getElementById('l-user').value = '';
+  document.getElementById('l-pass').value = '';
+  show('login');
+}
+
+window.addEventListener('online',()=>{showBar('Back online — syncing...','syncing');syncAll();});
+window.addEventListener('offline',()=>showBar('Offline — updates saved locally','offline'));
+if(!navigator.onLine)showBar('Offline — updates saved locally','offline');
+
+// ── Service worker: makes the app installable + openable offline ──
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+
+// Init — show UI instantly, do everything else after
+/* ── Change own password ── */
+function openPwModal() {
+  ['pw-cur','pw-new','pw-new2'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  const e = document.getElementById('pw-err');
+  e.style.display = 'none'; e.textContent = '';
+  document.getElementById('pw-modal').style.display = 'flex';
+  document.getElementById('pw-cur').focus();
+}
+function closePwModal() { document.getElementById('pw-modal').style.display = 'none'; }
+
+async function savePassword() {
+  const cur = document.getElementById('pw-cur').value;
+  const nw  = document.getElementById('pw-new').value;
+  const nw2 = document.getElementById('pw-new2').value;
+  const err = document.getElementById('pw-err');
+  const fail = (m) => { err.textContent = m; err.style.display = 'block'; };
+  err.style.display = 'none';
+
+  // Catch everything we can locally, before the window closes — a background
+  // failure after closing is easy to miss.
+  if (!cur || !nw) return fail('Enter your current and new password.');
+  if (nw.length < 8) return fail('New password must be at least 8 characters.');
+  if (nw !== nw2) return fail('The two new passwords do not match.');
+  if (nw === cur) return fail('The new password is the same as the current one.');
+
+  // Close now, finish the save in the background.
+  closePwModal();
+  showBar('Changing password…', 'ok');
+
+  fetch(API, { method:'POST', body: JSON.stringify({
+    action: 'change_password', currentPassword: cur, newPassword: nw, token: tok()
+  })})
+    .then(r => r.json())
+    .then(d => {
+      if (isAuthError(d)) { forceRelogin(); return; }
+      if (d && d.success) {
+        showBar('Password changed ✓ — use it next time you sign in.', 'ok');
+      } else {
+        // The password did NOT change — this must not be missed.
+        pwFailBar('⚠️ Password NOT changed: ' + ((d && d.message) || 'unknown error') +
+                  ' — keep using your old password. (Tap to dismiss)');
+      }
+    })
+    .catch(() => {
+      pwFailBar('⚠️ Password NOT changed — no connection. Keep using your old password. (Tap to dismiss)');
+    });
+}
+
+// A failure bar that does NOT auto-dismiss — the user must acknowledge it,
+// otherwise they could walk away believing their password changed.
+function pwFailBar(msg) {
+  const b = document.getElementById('sbar');
+  clearTimeout(showBar._t);
+  b.className = 'sbar show bad';
+  b.textContent = msg;
+  b.onclick = () => { b.className = 'sbar'; };
+}
+
+function initApp() {
+  const savedSession = localStorage.getItem('ub_session');
+  if (!savedSession) { show('login'); return; }
+
+  currentUser = JSON.parse(savedSession);
+  selectedArea = String(currentUser.area || selectedArea);
+  document.getElementById('wlabel').textContent = currentUser.name || 'Field Staff';
+  document.getElementById('area-chip').textContent = 'Area: ' + selectedArea;
+  loadAreas();
+
+  // Show home screen immediately with a loading message
+  document.getElementById('alist').innerHTML = '<div class="loading">⏳ Loading accounts...</div>';
+  show('home');
+  switchNav('home');
+
+  // A session older than the token's 12-hour life is already dead server-side.
+  // Clear the customer data it left behind rather than displaying a stale list.
+  try {
+    const started = Number(localStorage.getItem('ub_session_at') || 0);
+    if (started && (Date.now() - started) > 12 * 60 * 60 * 1000) {
+      wipeCachedData();
+      show('login');
+      return;
+    }
+  } catch(e) {}
+
+  // Defer ALL data work — let the browser paint first
+  setTimeout(() => {
+    // Load cache
+    let hadCache = false;
+    try {
+      const cached = localStorage.getItem(CK);
+      if (cached) {
+        allAccounts = JSON.parse(cached).sort((a,b)=>Number(a.row)-Number(b.row)); // locked shown read-only
+        filtered = allAccounts;
+        page = 1;
+        renderList();
+        const pc = allAccounts.filter(a=>a.status==='pending').length;
+        document.getElementById('lcount').textContent = pc+' pending / '+allAccounts.length+' total';
+        hadCache = allAccounts.length > 0;
+      }
+    } catch(e) {}
+
+    // Open IndexedDB and sync in background
+    openDB().then(() => loadPending()).then(() => {
+      updateDot();
+      renderList(); // re-render with pending/synced tags now that pending is loaded
+
+      if (!navigator.onLine) { showBar('Offline — cached data shown', 'offline'); return; }
+
+      const unsynced = pending.filter(p => !p.synced);
+      if (unsynced.length) {
+        // We have readings to push — sync, then pull fresh state
+        showBar('Syncing ' + unsynced.length + ' offline readings...', 'syncing');
+        syncAll().then(() => loadAll(true)).catch(() => {});
+        return;
+      }
+
+      // Reopening the app should NOT refetch. The accounts don't change while
+      // the worker is out in the field — a reload just costs them a wait on a
+      // slow connection. Fetch only on first login; otherwise trust the cache
+      // and let them pull fresh with 🔄 when they want it.
+      if (!hadCache) {
+        loadAll(true).catch(() => {});
+      } else {
+        showBar('Showing saved list — tap 🔄 to refresh', 'ok');
+      }
+    }).catch(() => {
+      if (navigator.onLine) loadAll(true).catch(() => {});
+    });
+  }, 200);
+}
+initApp();
+</script>
+</body>
+</html>
