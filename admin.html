@@ -360,7 +360,7 @@ tr:last-child td{border-bottom:none;}
   <div class="hdr">
     <div class="hdr-in">
       <span style="font-size:20px">🛠️</span>
-      <h1>Unbilled Admin <span style="font-size:11px;font-weight:400;opacity:.6;">v73 · security</span></h1>
+      <h1>Unbilled Admin <span style="font-size:11px;font-weight:400;opacity:.6;">V1.0 · DB UPADATE</span></h1>
       <span class="who" id="who"></span>
       <button onclick="toggleTheme()" id="theme-btn" title="Switch light / dark" style="margin-right:6px;">🌙</button>
       <button onclick="openPwModal()" style="margin-right:6px;">🔑 Password</button>
@@ -433,6 +433,7 @@ tr:last-child td{border-bottom:none;}
           <span style="display:flex;gap:8px;">
             <button class="addbtn" id="ent-edit-btn" style="background:#2563eb;" onclick="toggleEntEdit()">✏️ Edit reading</button>
             <button class="addbtn" id="ent-save-btn" style="background:#0f766e;" onclick="saveEnteredReadings()" disabled>💾 Save</button>
+            <button class="addbtn" id="move-unbilled-btn" style="background:#64748b;" onclick="moveToUnbilled()" disabled>↩️ Move to Unbilled</button>
             <button class="addbtn" id="lock-btn" style="background:#b45309;" onclick="lockSelected()" disabled>🔒 Mark selected done → billing</button>
           </span>
         </h3>
@@ -1800,6 +1801,8 @@ function toggleAllEntered(cb) {
 function updateLockBtn() {
   const anyChecked = Array.from(document.querySelectorAll('.ent-cb')).some(x => x.checked);
   document.getElementById('lock-btn').disabled = !anyChecked;
+  const mv = document.getElementById('move-unbilled-btn');
+  if (mv) mv.disabled = !anyChecked;
 }
 
 // Highlight a row yellow while its checkbox is ticked (locked rows stay green)
@@ -1819,7 +1822,41 @@ function onEnteredTick(cb) {
   }
   updateLockBtn();
 }
+// Send selected accounts back to Unbilled New — clears reading, date and tag.
+// Remarks and photo are kept. Locked rows are refused by the server.
+async function moveToUnbilled() {
+  const items = [];
+  document.querySelectorAll('#entered-body tbody tr').forEach(tr => {
+    const cb = tr.querySelector('.ent-cb');
+    if (cb && cb.checked) {
+      const r = enteredRows[parseInt(tr.getAttribute('data-ri'))];
+      if (r) items.push({ row: r.row, acno: r.acno });
+    }
+  });
+  if (!items.length) { flash('Tick the accounts to move first.', false); return; }
 
+  if (!confirm('Move ' + items.length + ' account(s) back to Unbilled New?\n\n' +
+    'This CLEARS the reading and the new date, and removes any Changeover/Attended tag.\n' +
+    'Remarks and photos are kept. Locked accounts cannot be moved.\n\nThis cannot be undone.')) return;
+
+  const btn = document.getElementById('move-unbilled-btn');
+  btn.textContent = 'Moving…'; btn.disabled = true;
+  try {
+    const d = await api({ action: 'move_to_unbilled', items: items });
+    if (d && d.success) {
+      flash(d.moved + ' account(s) moved back to Unbilled New ✓' +
+        (d.skippedLocked ? ', ' + d.skippedLocked + ' skipped (locked)' : ''), true);
+      preloadCache = null; newCache = null; dashCache = null;
+      if (session.user.role === 'supervisor') startPreload();
+      loadEntered();
+    } else {
+      flash((d && d.message) || 'Could not move.', false);
+    }
+  } catch (e) {
+    if (e.message !== 'auth') flash('Could not connect.', false);
+  }
+  btn.textContent = '↩️ Move to Unbilled'; btn.disabled = true;
+}
 async function lockSelected() {
   const items = [];
   document.querySelectorAll('#entered-body tbody tr').forEach(tr => {
