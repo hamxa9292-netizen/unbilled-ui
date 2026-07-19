@@ -64,6 +64,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .acard{background:#fff;margin:0 12px 8px;border-radius:12px;padding:13px 14px;box-shadow:0 1px 2px rgba(0,0,0,.06);cursor:pointer;border-left:4px solid #f59e0b;display:flex;align-items:center;gap:10px;}
 .acard:active{opacity:.85;}
 .acard.updated{background:#f0fdf4;border-left-color:#16a34a;}
+/* Accounts carrying a supervisor remark: violet tint, pushed to the bottom of
+   the round so the straightforward ones stay at the top. */
+.acard.remarked{background:#f5f3ff;border-left-color:#7c3aed;}
+.acard.updated.remarked{background:#f0fdf4;border-left-color:#16a34a;} /* done still wins */
+.aremark{font-size:12px;color:#6d28d9;font-weight:600;margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ainfo{flex:1;min-width:0;}
 .aacno{font-size:15px;font-weight:700;color:#1F4E79;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .utag{font-size:10px;font-weight:700;color:#16a34a;background:#dcfce7;padding:2px 7px;border-radius:10px;}
