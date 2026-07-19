@@ -715,9 +715,24 @@ async function bgRefresh() {
     }
   } catch(e) {}
 }
+function escHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function hasRemark(a){ return String(a.remarks || '').trim() !== ''; }
 
+// Accounts with a remark sink to the bottom; the rest keep sheet order.
+// This sorts `filtered` itself rather than just the visible slice, so the
+// Prev/Next buttons walk the list in the same order the worker sees — and so
+// the ordering survives pagination instead of applying per page.
+function sortAccounts(list){
+  return list.slice().sort((a,b)=>{
+    const ar = hasRemark(a)?1:0, br = hasRemark(b)?1:0;
+    if (ar !== br) return ar - br;
+    return Number(a.row) - Number(b.row);
+  });
+}
 function renderList() {
-  const el = document.getElementById('alist');
+const el = document.getElementById('alist');
+  filtered = sortAccounts(filtered);          // remarked accounts to the bottom
   const slice = filtered.slice(0, page*pageSize);
   if (!filtered.length) {
     el.innerHTML='<div class="empty"><div style="font-size:44px;margin-bottom:10px">🎉</div><div>All accounts have readings!</div></div>';
@@ -731,7 +746,8 @@ function renderList() {
     const isGreen = syncedLocally || sheetDone;
     // Show orange "Saving..." tag if saved locally but not yet synced to sheet
     const hasPendingLocal = pending.some(p => String(p.acno) === String(a.acno) && !p.synced);
-    const cls = isGreen ? 'updated' : '';
+    const remark = String(a.remarks || '').trim();
+    const cls = (isGreen ? 'updated' : '') + (remark ? ' remarked' : '');
     let tag = '';
     if (a.locked) {
       tag = '<span class="utag" style="background:#f3f4f6;color:#6b7280;">\u{1F512} Locked</span>';
@@ -746,6 +762,7 @@ function renderList() {
         <div class="ameter">Meter: ${a.meter||'—'}</div>
         <div class="aaddr">${a.address||'—'}</div>
         <div class="ardate">R_DATE: ${a.rdate||'—'}</div>
+        ${remark ? `<div class="aremark">📝 ${escHtml(remark)}</div>` : ''}
       </div>
       <span class="arr">›</span>
     </div>`;
