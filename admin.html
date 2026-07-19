@@ -1736,9 +1736,11 @@ function renderEntered() {
         ' style="padding:5px 4px;' + wrap + 'cursor:pointer;">' +
         esc(v ?? '') + '</td>';
     }).join('');
-    const cb = r.locked
-      ? '<input type="checkbox" disabled title="Already locked">'
-      : '<input type="checkbox" class="ent-cb" onchange="onEnteredTick(this)">';
+    // Locked rows are selectable too — a supervisor still needs to open them to
+    // read the remarks or view the meter photo. The bulk actions filter locked
+    // rows out, so selecting one can never change it.
+    const cb = '<input type="checkbox" class="ent-cb" onchange="onEnteredTick(this)"' +
+      (r.locked ? ' data-locked="1" title="Locked — view only"' : '') + '>';
     const statusCell = r.locked
       ? '<td style="text-align:center;padding:5px 3px;"><span class="role-b" style="background:#dcfce7;color:#166534;">🔒</span></td>'
       : (r.changeover
@@ -1799,12 +1801,15 @@ function toggleAllEntered(cb) {
 }
 
 function updateLockBtn() {
-  const anyChecked = Array.from(document.querySelectorAll('.ent-cb')).some(x => x.checked);
-  document.getElementById('lock-btn').disabled = !anyChecked;
+  // Locked rows may be ticked for viewing, but they are not actionable — the
+  // buttons stay disabled unless at least one UNLOCKED row is selected.
+  const actionable = Array.from(document.querySelectorAll('.ent-cb'))
+    .some(x => x.checked && x.getAttribute('data-locked') !== '1');
+  const lb = document.getElementById('lock-btn');
+  if (lb) lb.disabled = !actionable;
   const mv = document.getElementById('move-unbilled-btn');
-  if (mv) mv.disabled = !anyChecked;
+  if (mv) mv.disabled = !actionable;
 }
-
 // Highlight a row yellow while its checkbox is ticked (locked rows stay green)
 function onEnteredTick(cb) {
   const tr = cb.closest('tr');
@@ -1830,7 +1835,8 @@ async function moveToUnbilled() {
     const cb = tr.querySelector('.ent-cb');
     if (cb && cb.checked) {
       const r = enteredRows[parseInt(tr.getAttribute('data-ri'))];
-      if (r) items.push({ row: r.row, acno: r.acno });
+      if (!r || r.locked) return;             // locked rows are view-only
+      items.push({ row: r.row, acno: r.acno });;
     }
   });
   if (!items.length) { flash('Tick the accounts to move first.', false); return; }
@@ -1858,15 +1864,17 @@ async function moveToUnbilled() {
   btn.textContent = '↩️ Move to Unbilled'; btn.disabled = true;
 }
 async function lockSelected() {
-  const items = [];
+  const items = []; let viewOnly = 0;
   document.querySelectorAll('#entered-body tbody tr').forEach(tr => {
     const cb = tr.querySelector('.ent-cb');
     if (cb && cb.checked) {
       const r = enteredRows[parseInt(tr.getAttribute('data-ri'))];
-      if (r) items.push({ row: r.row, acno: r.acno });
+      if (!r) return;
+      if (r.locked) { viewOnly++; return; }   // ticked only to inspect
+      items.push({ row: r.row, acno: r.acno });
     }
   });
-  if (!items.length) return;
+  if (!items.length) { flash('Only locked account(s) selected — nothing to lock.', false); return; }
   if (!confirm('Mark ' + items.length + ' account(s) as done and entered into billing?\n\n' +
     'They will be LOCKED — field staff can no longer change them, and they will be archived at month close.')) return;
 
