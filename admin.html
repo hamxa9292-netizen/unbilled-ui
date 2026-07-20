@@ -1923,23 +1923,38 @@ async function lockSelected() {
 // Bundle the locked accounts' photos into a ZIP, download it, and only then
 // permanently delete them from Drive. Deletion is irreversible, so it never
 // happens until the user confirms the file actually arrived.
+// Bundle the locked accounts' photos into a ZIP and download it.
+// Photos are deliberately NOT deleted here: they remain in the database for the
+// two-month retention window and are purged automatically at month close.
+// Deleting on lock destroyed photos supervisors still needed to review.
 async function exportAndPurgePhotos(items) {
   if (!confirm('Download the meter photos for these ' + items.length + ' account(s) as a ZIP?\n\n' +
-    'After you confirm the download, the photos will be PERMANENTLY deleted from Google Drive to free up space.')) return;
+    'The photos stay available in the app until month close.')) return;
 
   const btn = document.getElementById('lock-btn');
   btn.textContent = 'Zipping photos…'; btn.disabled = true;
   let d;
   try {
     d = await api({ action: 'export_photos', items: items });
-  } catch(e) {
-    if (e.message !== 'auth') flash('Could not build the ZIP. Photos were NOT deleted.', false);
+  } catch (e) {
+    if (e.message !== 'auth') flash('Could not build the ZIP.', false);
     return;
   }
   if (!d || !d.success) {
-    flash((d && d.message) || 'Could not build the ZIP. Photos were NOT deleted.', false);
+    flash((d && d.message) || 'Could not build the ZIP.', false);
     return;
   }
+
+  const a = document.createElement('a');
+  a.href = (d.zipUrl && d.zipUrl.charAt(0) === '/')
+    ? API.replace(/\/api\/legacy$/, '') + d.zipUrl : d.zipUrl;
+  a.download = d.zipName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  flash('Downloading ' + d.zipName + ' (' + d.count + ' photo' +
+    (d.count === 1 ? '' : 's') + ') ✓', true);
+}
 
   // Trigger the download
   const a = document.createElement('a');
