@@ -1920,9 +1920,6 @@ async function lockSelected() {
   btn.innerHTML = '🔒 Mark selected done → billing';
 }
 
-// Bundle the locked accounts' photos into a ZIP, download it, and only then
-// permanently delete them from Drive. Deletion is irreversible, so it never
-// happens until the user confirms the file actually arrived.
 // Bundle the locked accounts' photos into a ZIP and download it.
 // Photos are deliberately NOT deleted here: they remain in the database for the
 // two-month retention window and are purged automatically at month close.
@@ -1954,39 +1951,6 @@ async function exportAndPurgePhotos(items) {
   a.remove();
   flash('Downloading ' + d.zipName + ' (' + d.count + ' photo' +
     (d.count === 1 ? '' : 's') + ') ✓', true);
-}
-
-  // Trigger the download
-  const a = document.createElement('a');
-  a.href = (d.zipUrl && d.zipUrl.charAt(0) === '/') ? API.replace(/\/api\/legacy$/, '') + d.zipUrl : d.zipUrl;
-  a.download = d.zipName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  flash('Downloading ' + d.zipName + ' (' + d.count + ' photo' + (d.count === 1 ? '' : 's') + ')…', true);
-
-  // Only delete once the user confirms the file is really on their PC.
-  const ok = confirm('ZIP: ' + d.zipName + '\n' + d.count + ' photo(s)' +
-    (d.missing ? ', ' + d.missing + ' account(s) had no photo' : '') + '\n\n' +
-    'Has the ZIP finished downloading and opened correctly?\n\n' +
-    'Click OK to PERMANENTLY DELETE these photos from Google Drive.\n' +
-    'Click Cancel to keep them (you can export again later).');
-  if (!ok) { flash('Photos kept in Drive — nothing deleted.', true); return; }
-
-  btn.textContent = 'Clearing Drive…';
-  try {
-    const r = await api({ action: 'delete_photos', fileIds: d.fileIds, rows: d.rows, zipId: d.zipId });
-    if (r && r.success) {
-      flash(r.deleted + ' photo(s) permanently deleted from Drive ✓' + (r.failed ? ', ' + r.failed + ' failed' : ''), true);
-      preloadCache = null;
-      if (session.user.role === 'supervisor') startPreload();
-      loadEntered();
-    } else {
-      flash((r && r.message) || 'Could not delete the photos from Drive.', false);
-    }
-  } catch(e) {
-    if (e.message !== 'auth') flash('Could not connect — photos are still in Drive.', false);
-  }
 }
 
 /* ── Projection calculator ── */
