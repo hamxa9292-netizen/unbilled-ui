@@ -378,6 +378,7 @@ tr:last-child td{border-bottom:none;}
       <button class="tab" id="tab-entered" onclick="switchTab('entered')">✅ Unbilled Taken</button>
       <button class="tab" id="tab-new" onclick="switchTab('new')">📋 Unbilled New</button>
       <button class="tab" id="tab-nometer" onclick="switchTab('nometer')">🚫 No-Meter</button>
+      <button class="tab" id="tab-photos" onclick="switchTab('photos')">📷 Photos</button>
       <button class="tab" id="tab-report" onclick="switchTab('report')">📄 Area Report</button>
     </div>
     </div>
@@ -620,6 +621,32 @@ tr:last-child td{border-bottom:none;}
             style="width:100%;padding:8px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:inherit;outline:none;margin-bottom:10px;">
           <div id="nm-list" class="loading" style="color:#9ca3af;">Loading…</div>
         </div>
+      </div>
+    </div>
+
+    <!-- PHOTO SEARCH TAB -->
+    <div id="pane-photos" style="display:none">
+      <div class="card">
+        <h3>Meter photo search</h3>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:12px;line-height:1.5;">
+          Find a stored meter photo — including <b>locked and archived</b> accounts.
+          Photos are kept for two month-cycles, then purged automatically at month close.
+        </div>
+        <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px;">
+          <div class="lfield" style="margin:0;min-width:160px;">
+            <label>Month</label>
+            <select id="ph-month" class="dsh-sel" style="width:100%;" onchange="photoSearch()">
+              <option value="">All months</option></select>
+          </div>
+          <div class="lfield" style="margin:0;min-width:220px;flex:1;">
+            <label>Search</label>
+            <input type="text" id="ph-q" placeholder="ACNO, meter or address…" oninput="photoSearchDebounced()"
+              onkeydown="if(event.key==='Enter')photoSearch()"
+              style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;font-family:inherit;outline:none;color:#111;background:#fff;">
+          </div>
+          <button class="addbtn" style="height:40px;background:#1F4E79;" onclick="photoSearch()">🔍 Search</button>
+        </div>
+        <div id="ph-body" class="loading" style="color:#9ca3af;">Loading…</div>
       </div>
     </div>
 
@@ -872,6 +899,7 @@ function switchTab(t) {
   document.getElementById('tab-entered').classList.toggle('active', t==='entered');
   document.getElementById('tab-new').classList.toggle('active', t==='new');
   document.getElementById('tab-nometer').classList.toggle('active', t==='nometer');
+  { const e=document.getElementById('tab-photos'); if(e) e.classList.toggle('active', t==='photos'); }
   document.getElementById('tab-report').classList.toggle('active', t==='report');
   document.getElementById('pane-users').style.display = t==='users' ? 'block' : 'none';
   document.getElementById('pane-overview').style.display = t==='overview' ? 'block' : 'none';
@@ -879,6 +907,7 @@ function switchTab(t) {
   document.getElementById('pane-entered').style.display = t==='entered' ? 'block' : 'none';
   document.getElementById('pane-new').style.display = t==='new' ? 'block' : 'none';
   document.getElementById('pane-nometer').style.display = t==='nometer' ? 'block' : 'none';
+  { const e=document.getElementById('pane-photos'); if(e) e.style.display = t==='photos' ? 'block' : 'none'; }
   document.getElementById('pane-report').style.display = t==='report' ? 'block' : 'none';
   document.getElementById('pane-dash').style.display = t==='dash' ? 'block' : 'none';
   if (t !== 'entered') { entStopPolling(); entBlinkRefresh(false); }
@@ -888,6 +917,7 @@ function switchTab(t) {
   if (t==='entered') initEnteredTab();
   if (t==='new') loadUnbilledNew();
   if (t==='nometer') { nmShowAreas(); nmLoadList(); }
+  if (t==='photos') photoSearch();
   if (t==='report') initReportTab();
 }
 
@@ -3065,6 +3095,87 @@ async function tagAs(tag) {
     if (e.message !== 'auth') flash('Could not connect.', false);
   }
   btn.textContent = label; btn.disabled = true;
+}
+
+/* ── Photo search ──────────────────────────────────────────────
+   Finds stored meter photos, including LOCKED and ARCHIVED accounts —
+   those have left every other listing, so this is the only way back to
+   them. Results are capped server-side at 200 rows. */
+let phMonthsLoaded = false, phTimer = null;
+
+function photoSearchDebounced(){ clearTimeout(phTimer); phTimer = setTimeout(photoSearch, 300); }
+
+async function photoSearch(){
+  const body = document.getElementById('ph-body');
+  if (!body) return;
+  const month = (document.getElementById('ph-month') || {}).value || '';
+  const qterm = (document.getElementById('ph-q') || {}).value || '';
+  body.className = 'loading'; body.style.color = '#9ca3af'; body.textContent = 'Searching…';
+  try {
+    const d = await api({ action: 'photo_search', month: month, q: qterm });
+    if (!d || !d.success) {
+      body.style.color = '#b91c1c';
+      body.textContent = (d && d.message) || 'Could not search.';
+      return;
+    }
+    // Fill the month dropdown once; it ignores the search term so it stays put.
+    if (!phMonthsLoaded && d.months) {
+      const sel = document.getElementById('ph-month');
+      sel.innerHTML = '<option value="">All months</option>' +
+        d.months.map(m => '<option value="' + esc(m) + '">' + esc(monthName(m)) + '</option>').join('');
+      sel.value = month;
+      phMonthsLoaded = true;
+    }
+    renderPhotoResults(d.rows || []);
+  } catch(e) {
+    if (e.message !== 'auth') { body.style.color = '#b91c1c'; body.textContent = 'Could not connect.'; }
+  }
+}
+
+function renderPhotoResults(rows){
+  const body = document.getElementById('ph-body');
+  body.className = ''; body.style.color = '';
+  if (!rows.length) {
+    body.innerHTML = '<div class="loading" style="color:#9ca3af;">No photos match.</div>';
+    return;
+  }
+  body.innerHTML =
+    '<div class="hint" style="margin-bottom:8px;">' + rows.length + ' photo(s)' +
+      (rows.length === 200 ? ' — first 200 shown, narrow your search' : '') + '</div>' +
+    '<div style="border:1px solid #e5e7eb;border-radius:9px;overflow:hidden;overflow-x:auto;">' +
+    '<table style="font-size:12px;width:100%;"><thead><tr>' +
+      '<th style="padding:6px 8px;">ACNO</th><th style="padding:6px 8px;">AREA</th>' +
+      '<th style="padding:6px 8px;">METER</th><th style="padding:6px 8px;">ADDRESS</th>' +
+      '<th style="padding:6px 8px;">R_DATE</th><th style="padding:6px 8px;">STATUS</th>' +
+      '<th style="padding:6px 8px;"></th></tr></thead><tbody>' +
+    rows.map(r => {
+      const st = r.archived
+        ? '<span class="role-b" style="background:#e5e7eb;color:#374151;">Archived</span>'
+        : (r.locked ? '<span class="role-b" style="background:#dcfce7;color:#166534;">🔒 Locked</span>'
+                    : '<span class="role-b" style="background:#fef3c7;color:#92400e;">Live</span>');
+      return '<tr>' +
+        '<td style="padding:6px 8px;font-weight:700;color:#1F4E79;">' + esc(r.acno) + '</td>' +
+        '<td style="padding:6px 8px;">' + esc(r.area) + '</td>' +
+        '<td style="padding:6px 8px;white-space:nowrap;">' + esc(r.meter || '—') + '</td>' +
+        '<td style="padding:6px 8px;">' + esc(r.address || '—') + '</td>' +
+        '<td style="padding:6px 8px;white-space:nowrap;">' + esc(r.rdate || '—') + '</td>' +
+        '<td style="padding:6px 8px;">' + st + '</td>' +
+        '<td style="padding:6px 8px;text-align:right;">' +
+          '<button class="act" onclick="phView(' + r.row + ',\'' + esc(r.acno) + '\')">📷 View</button></td>' +
+      '</tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+// Open a photo in the existing fullscreen viewer (zoom / pan / brightness / negative).
+async function phView(row, acno){
+  flash('Loading photo…', true);
+  try {
+    const d = await api({ action: 'get_photo', row: row, acno: acno });
+    if (!d || !d.success) { flash((d && d.message) || 'Photo unavailable.', false); return; }
+    pvOpen('data:' + (d.mime || 'image/jpeg') + ';base64,' + d.data, acno);
+  } catch(e) {
+    if (e.message !== 'auth') flash('Could not load the photo.', false);
+  }
 }
 
 /* ── Light / dark theme ── */
