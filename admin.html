@@ -2264,7 +2264,14 @@ async function nmLoadList(force) {
   }
 }
 /* ── Unbilled New tab ── */
-const NEW_COLS = ENTERED_COLS; // same visible columns as Unbilled Taken
+// Unbilled New shows the same columns as Unbilled Taken plus DC status
+// (column J). A disconnected supply changes what the reader should expect, so
+// it belongs near the front rather than buried off to the right.
+const NEW_COLS = (function () {
+  const cols = ENTERED_COLS.slice();
+  cols.splice(2, 0, { i: 10, label: 'DC' });   // after CAT
+  return cols;
+})();
 const COL_REMARKS_IDX = 21;    // U — Remarks
 let newRows = [];
 
@@ -2365,6 +2372,13 @@ const fQ = (document.getElementById('new-search') || {}).value || '';
   const rows = shown.map(({ r, ri }) => {
     const cells = NEW_COLS.map(c => {
       const v = r.cells[c.i - 1];
+      // DC state (col J) is a flag, not a value to copy — show it as a badge.
+      if (c.i === 10) {
+        const dc = String(v ?? '').trim();
+        return '<td style="padding:5px 4px;text-align:center;white-space:nowrap;">' +
+          (dc ? '<span class="role-b" style="background:#fee2e2;color:#b91c1c;" title="' +
+                esc(dc) + '">\u26A1 DC</span>' : '') + '</td>';
+      }
       const wrap = (c.i === 5) ? 'white-space:normal;word-break:break-word;min-width:120px;' : 'white-space:nowrap;';
       return '<td class="copycell" onclick="copyCell(this)" title="Click to copy" data-v="' + esc(v ?? '') + '"' +
         ' style="padding:5px 4px;' + wrap + 'cursor:pointer;">' + esc(v ?? '') + '</td>';
