@@ -453,6 +453,11 @@ tr:last-child td{border-bottom:none;}
             <input type="date" id="ent-date" onchange="onEntAreaChange()"
               style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;font-family:inherit;outline:none;color:#111;background:#fff;">
           </div>
+          <div class="lfield" style="margin:0;min-width:190px;">
+            <label>Search</label>
+            <input type="text" id="ent-search" placeholder="ACNO, meter or address…" oninput="renderEntered()"
+              style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;font-family:inherit;outline:none;color:#111;background:#fff;">
+          </div>
           <button class="act" id="ent-refresh-btn" style="height:40px;" onclick="refreshEntered()">🔄 Refresh</button>
           <button class="act" style="height:40px;" onclick="clearEnteredFilters()">Clear</button>
         </div>
@@ -550,6 +555,8 @@ tr:last-child td{border-bottom:none;}
           <select id="new-area-filter" onchange="renderUnbilledNew()" class="dsh-sel"><option value="all">All areas</option></select>
           <label style="font-size:13px;font-weight:600;color:#374151;">R_DATE:</label>
           <select id="new-rdate-filter" onchange="renderUnbilledNew()" class="dsh-sel"><option value="all">All dates</option></select>
+          <input type="text" id="new-search" placeholder="🔍 ACNO, meter or address…" oninput="renderUnbilledNew()"
+            class="dsh-sel" style="min-width:200px;">
           <span id="rd-date-wrap" style="display:none;align-items:center;gap:8px;margin-left:auto;padding:7px 11px;border:1px solid #99f6e4;background:#f0fdfa;border-radius:9px;">
             <span style="font-size:12px;font-weight:700;color:#0f766e;white-space:nowrap;">📅 Reading date</span>
             <input type="date" id="rd-date" onchange="showRdDateLbl()" style="padding:5px 8px;border:1.5px solid #5eead4;border-radius:7px;font-size:13px;font-family:inherit;outline:none;">
@@ -605,10 +612,12 @@ tr:last-child td{border-bottom:none;}
 
         <!-- Current no-meter list -->
         <div class="card" style="width:300px;flex:none;">
-          <h3 style="display:flex;justify-content:space-between;align-items:center;">
+         <h3 style="display:flex;justify-content:space-between;align-items:center;">
             No-meter list
             <button class="act" onclick="nmLoadList()">🔄</button>
           </h3>
+          <input type="text" id="nm-search" placeholder="🔍 ACNO or address…" oninput="nmRender()"
+            style="width:100%;padding:8px 10px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:inherit;outline:none;margin-bottom:10px;">
           <div id="nm-list" class="loading" style="color:#9ca3af;">Loading…</div>
         </div>
       </div>
@@ -1575,7 +1584,12 @@ async function entPollCheck() {
     preloadCache = { rows: fresh, headers: d.headers || (preloadCache && preloadCache.headers) || [], at: Date.now() };
   } catch(e) {}
 }
-
+// Case-insensitive "contains" across any of the given fields. Empty term matches all.
+function matchQ(term, ...fields){
+  const t = String(term || '').trim().toLowerCase();
+  if (!t) return true;
+  return fields.some(f => String(f ?? '').toLowerCase().includes(t));
+}
 // Auto-render the selected area from the preload cache (instant, no fetch).
 function onEntAreaChange() {
   const area = document.getElementById('ent-area').value;
@@ -1688,6 +1702,7 @@ function refreshEntered() {
 function clearEnteredFilters() {
   document.getElementById('ent-area').value = '';
   document.getElementById('ent-date').value = '';
+  const es = document.getElementById('ent-search'); if (es) es.value = '';
   enteredRows = [];
   const body = document.getElementById('entered-body');
   body.className = 'loading'; body.style.color = '#9ca3af';
@@ -1700,11 +1715,19 @@ function renderEntered() {
   body.className = ''; body.style.color = '';
 
 
-  const shown = enteredRows.slice().sort((a, b) => (a.locked ? 1 : 0) - (b.locked ? 1 : 0)); // pending first, locked at bottom
+  const q = (document.getElementById('ent-search') || {}).value || '';
+  const shown = enteredRows.slice()
+    .filter(r => matchQ(q, r.acno, r.cells[3], r.cells[4]))   // ACNO, meter, address
+    .sort((a, b) => (a.locked ? 1 : 0) - (b.locked ? 1 : 0)); // pending first, locked at bottom
 
   if (!enteredRows.length) {
     body.innerHTML = '<div class="loading">No entered readings found for this area/date.</div>';
     document.getElementById('lock-btn').disabled = true;
+    return;
+  }
+  if (!shown.length) {
+    body.innerHTML = '<div class="loading">No account matches “' + esc(q) + '”.</div>';
+    updateLockBtn();
     return;
   }
   const head = '<th style="width:26px;text-align:center;padding:5px 3px;"><input type="checkbox" id="ent-all" onchange="toggleAllEntered(this)"></th>' +
@@ -2167,36 +2190,70 @@ async function nmSave() {
   }
 }
 
-async function nmLoadList(force) {
+let nmRows = [];
+
+// Renders the no-meter list from nmRows, honouring the search box. Each entry
+// carries an Undo button that clears the flag and returns the account to the
+// normal reading rounds.
+function nmRender() {
   const box = document.getElementById('nm-list');
   if (!box) return;
-  const render = (rows) => {
-    box.className = '';
-    if (!rows.length) { box.innerHTML = '<div class="hint">No accounts flagged yet.</div>'; return; }
-    box.innerHTML =
-      '<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">' + rows.length + ' account(s)</div>' +
-      '<div style="max-height:420px;overflow-y:auto;">' +
-      rows.slice().reverse().map(r =>
-        '<div style="border-bottom:1px solid #f3f4f6;padding:7px 0;">' +
+  box.className = '';
+  const q = (document.getElementById('nm-search') || {}).value || '';
+  const rows = nmRows.filter(r => matchQ(q, r.acno, r.address, r.meter, r.area));
+  if (!nmRows.length) { box.innerHTML = '<div class="hint">No accounts flagged yet.</div>'; return; }
+  if (!rows.length) { box.innerHTML = '<div class="hint">No match for “' + esc(q) + '”.</div>'; return; }
+  box.innerHTML =
+    '<div style="font-size:12px;color:#6b7280;margin-bottom:8px;">' + rows.length +
+      ' of ' + nmRows.length + ' account(s)</div>' +
+    '<div style="max-height:420px;overflow-y:auto;">' +
+    rows.slice().reverse().map(r =>
+      '<div style="border-bottom:1px solid #f3f4f6;padding:7px 0;display:flex;align-items:flex-start;gap:8px;">' +
+        '<div style="flex:1;min-width:0;">' +
           '<div style="font-weight:700;color:#1F4E79;font-size:13px;">' + esc(r.acno) +
             '<span class="area-b" style="margin-left:6px;">Area ' + esc(r.area || '—') + '</span></div>' +
           '<div style="font-size:12px;color:#6b7280;">' + esc(r.address || '—') + '</div>' +
-        '</div>'
-      ).join('') + '</div>';
-  };
-  // Instant from cache
-  if (!force && nmListCache) { render(nmListCache); return; }
+        '</div>' +
+        '<button class="act" style="flex:none;background:#fef3c7;color:#92400e;" ' +
+          'title="Remove the NO METER flag" onclick="nmRemove(\'' + esc(r.acno) + '\')">↩ Undo</button>' +
+      '</div>'
+    ).join('') + '</div>';
+}
+
+// Clear a NO METER flag — the account rejoins the normal reading rounds.
+async function nmRemove(acno) {
+  if (!confirm('Remove the NO METER flag from ACNO ' + acno + '?\n\n' +
+    'It will reappear in Unbilled New and field staff will be asked to read it again.')) return;
+  try {
+    const d = await api({ action: 'nometer_remove', acno: acno });
+    if (d && d.success) {
+      flash('ACNO ' + acno + ' is no longer marked NO METER ✓', true);
+      nmListCache = null; newCache = null; dashCache = null;
+      nmLoadList(true);
+      if (session.user.role === 'supervisor') startPreload();
+    } else {
+      flash((d && d.message) || 'Could not remove.', false);
+    }
+  } catch (e) {
+    if (e.message !== 'auth') flash('Could not connect.', false);
+  }
+}
+
+async function nmLoadList(force) {
+  const box = document.getElementById('nm-list');
+  if (!box) return;
+  if (!force && nmListCache) { nmRows = nmListCache; nmRender(); return; }
   box.className = 'loading'; box.style.color = '#9ca3af'; box.textContent = 'Loading…';
   try {
     const d = await api({ action: 'nometer_list' });
     if (!d.success) { box.textContent = d.message || 'Could not load.'; return; }
     nmListCache = d.rows || [];
-    render(nmListCache);
+    nmRows = nmListCache;
+    nmRender();
   } catch(e) {
     if (e.message !== 'auth') box.textContent = 'Could not connect.';
   }
 }
-
 /* ── Unbilled New tab ── */
 const NEW_COLS = ENTERED_COLS; // same visible columns as Unbilled Taken
 const COL_REMARKS_IDX = 21;    // U — Remarks
@@ -2284,10 +2341,12 @@ function renderUnbilledNew() {
     return;
   }
   // Keep the TRUE index into newRows in data-ri so remarks save maps correctly
-const shown = newRows
+const fQ = (document.getElementById('new-search') || {}).value || '';
+  const shown = newRows
     .map((r, ri) => ({ r, ri }))
     .filter(x => (fArea === 'all' || String(x.r.area ?? x.r.cells[NEW_AREA_COL - 1] ?? '').trim() === fArea)
-              && (fRdate === 'all' || normDate_(x.r.cells[NEW_RDATE_COL - 1]) === fRdate));
+              && (fRdate === 'all' || normDate_(x.r.cells[NEW_RDATE_COL - 1]) === fRdate)
+              && matchQ(fQ, x.r.acno, x.r.cells[3], x.r.cells[4]));
 
   const readOnlyNew = (session.user.role === 'admin');   // admins view only
   const head = (readOnlyNew ? '' : '<th style="width:26px;text-align:center;padding:5px 3px;"><input type="checkbox" onchange="toggleAllNew(this)"></th>') +
