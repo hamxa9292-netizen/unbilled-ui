@@ -252,6 +252,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="detail-hdr">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;">
         <button onclick="goBack()" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit;flex-shrink:0;">✕ List</button>
+        <span id="d-dc" style="flex-shrink:0;display:none;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#fee2e2;color:#b91c1c;">⚡ DC METER</span>
         <span class="badge" id="d-status" style="flex-shrink:0;"></span>
       </div>
       <div style="color:#7dd3fc;font-size:13px;font-weight:700;line-height:1.3;word-break:break-word;" id="d-addr"></div>
@@ -748,6 +749,9 @@ const el = document.getElementById('alist');
     const hasPendingLocal = pending.some(p => String(p.acno) === String(a.acno) && !p.synced);
     const remark = String(a.remarks || '').trim();
     const cls = (isGreen ? 'updated' : '') + (remark ? ' remarked' : '');
+    // Disconnected supply — the reader needs to know before walking to the meter.
+    const dcTag = String(a.dcState || '').trim()
+      ? '<span class="utag" style="background:#fee2e2;color:#b91c1c;">\u26A1 DC</span>' : '';
     let tag = '';
     if (a.locked) {
       tag = '<span class="utag" style="background:#f3f4f6;color:#6b7280;">\u{1F512} Locked</span>';
@@ -758,7 +762,7 @@ const el = document.getElementById('alist');
     }
     return `<div class="acard ${cls}" onclick="openAccount('${a.acno}')">
       <div class="ainfo">
-        <div class="aacno">ACNO ${a.acno}${tag}</div>
+        <div class="aacno">ACNO ${a.acno}${dcTag}${tag}</div>
         <div class="ameter">Meter: ${a.meter||'—'}</div>
         <div class="aaddr">${a.address||'—'}</div>
         <div class="ardate">R_DATE: ${a.rdate||'—'}</div>
@@ -849,6 +853,12 @@ function fillDetail(d, keepKeyboard) {
   document.getElementById('d-prev').textContent=d.prevReading||'—';
   document.getElementById('d-pdate').textContent=d.prevDate||'—';
   document.getElementById('d-rdate').textContent=d.rdate||'—';
+  const dcEl = document.getElementById('d-dc');
+  if (dcEl) {
+    const dc = String(d.dcState || '').trim();
+    dcEl.style.display = dc ? 'inline-block' : 'none';
+    dcEl.title = dc;                      // raw DC_STATE value on hover/long-press
+  }
   const b=document.getElementById('d-status');
   b.textContent=d.locked?'\u{1F512} Locked':(d.status==='done'?'Done':'Pending');
   b.className='badge '+(d.locked?'bp':(d.status==='done'?'bd':'bp'));
