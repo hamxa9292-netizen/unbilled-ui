@@ -574,7 +574,10 @@ tr:last-child td{border-bottom:none;}
       <div class="card">
         <h3>
           Area performance report
-          <span style="display:flex;gap:8px;">
+          <span style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="act" onclick="exportAccounts('new')" title="Untaken accounts">⬇ Unbilled New</button>
+            <button class="act" onclick="exportAccounts('taken')" title="Accounts with readings">⬇ Unbilled Taken</button>
+            <button class="addbtn" style="background:#1F4E79;" onclick="exportAccounts('all')" title="Every account in the current month (all statuses)">⬇ ALL DATA</button>
             <button class="act" onclick="printReport()">🖨️ Print</button>
           </span>
         </h3>
@@ -3109,6 +3112,51 @@ async function tagAs(tag) {
     if (e.message !== 'auth') flash('Could not connect.', false);
   }
   btn.textContent = label; btn.disabled = true;
+}
+
+/* ── Spreadsheet export (Area Report tab) ──────────────────────
+   Pulls full account rows from the server and writes an .xlsx with the
+   fixed column layout. 'new' and 'taken' honour the report's area/month;
+   'all' exports every account the user may see, locked and archived
+   included. */
+const EXPORT_COLS = ['VO','ACNO','CAT','METER_NO','CONSADDRESS','CONTACT','AREA',
+  'READING','P_READDATE','D-C_STATE','NO METER','R_DATE','N.Reading','New Date',
+  'C. USAGE','AVG USAGE','C. DAYS','DATE>F','READING>F','Remarks'];
+
+async function exportAccounts(scope){
+  if (typeof XLSX === 'undefined') { flash('Spreadsheet library not loaded — refresh and retry.', false); return; }
+  const label = scope === 'new' ? 'Unbilled New' : scope === 'taken' ? 'Unbilled Taken' : 'ALL DATA';
+  const area = (document.getElementById('rep-area') || {}).value || '';
+  const month = (document.getElementById('rep-month') || {}).value || '';
+
+  flash('Preparing ' + label + ' export…', true);
+  let d;
+  try {
+    d = await api({ action: 'export_accounts', scope: scope, area: area, month: month });
+  } catch (e) {
+    if (e.message !== 'auth') flash('Could not build the export.', false);
+    return;
+  }
+  if (!d || !d.success) { flash((d && d.message) || 'Export failed.', false); return; }
+  if (!d.count) { flash('No accounts to export for that selection.', false); return; }
+
+  // Order every row's keys to the fixed column layout.
+  const aoa = [EXPORT_COLS].concat(
+    d.rows.map(r => EXPORT_COLS.map(c => (r[c] === undefined || r[c] === null) ? '' : r[c]))
+  );
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // Sensible column widths.
+  ws['!cols'] = EXPORT_COLS.map(c =>
+    ({ wch: c === 'CONSADDRESS' ? 42 : (c === 'Remarks' ? 30 : (c.length < 6 ? 9 : 13)) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, label.slice(0, 31));
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const scopeName = scope === 'all' ? 'ALL' : (scope === 'new' ? 'UnbilledNew' : 'UnbilledTaken');
+  const monthBit = (scope === 'all' && d.month) ? '_' + d.month : '';
+  const areaBit = (scope !== 'all' && area && area !== 'all') ? '_Area' + area : '';
+  XLSX.writeFile(wb, 'Unbilled_' + scopeName + areaBit + monthBit + '_' + stamp + '.xlsx');
+  flash(label + ' exported — ' + d.count + ' row(s) ✓', true);
 }
 
 /* ── Photo search ──────────────────────────────────────────────
