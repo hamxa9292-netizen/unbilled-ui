@@ -379,6 +379,7 @@ tr:last-child td{border-bottom:none;}
       <button class="tab" id="tab-new" onclick="switchTab('new')">📋 Unbilled New</button>
       <button class="tab" id="tab-nometer" onclick="switchTab('nometer')">🚫 No-Meter</button>
       <button class="tab" id="tab-photos" onclick="switchTab('photos')">📷 Photos</button>
+      <button class="tab" id="tab-archive" onclick="switchTab('archive')">🗄️ Archive</button>
       <button class="tab" id="tab-report" onclick="switchTab('report')">📄 Area Report</button>
     </div>
     </div>
@@ -565,7 +566,16 @@ tr:last-child td{border-bottom:none;}
           </span>
         </div>
         <div id="new-note" style="display:none;font-size:12px;color:#075985;background:#e0f2fe;border-radius:8px;padding:8px 12px;margin-bottom:10px;"></div>
-        <div id="new-body" class="loading" style="color:#9ca3af;">Loading…</div>
+        <div style="display:flex;gap:16px;align-items:flex-start;">
+          <div id="new-body" class="loading" style="color:#9ca3af;flex:1;min-width:0;">Loading…</div>
+          <div id="rmk-timeline" style="display:none;width:290px;flex:none;background:#faf9ff;border:1px solid #e5e0f5;border-radius:11px;padding:14px 15px;position:sticky;top:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <div style="font-weight:700;color:#6d28d9;font-size:13px;">📝 Remark history</div>
+              <button onclick="closeRemarkTimeline()" style="background:none;border:none;font-size:16px;color:#9ca3af;cursor:pointer;line-height:1;">×</button>
+            </div>
+            <div id="rmk-timeline-body" style="font-size:12px;color:#374151;"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -650,6 +660,32 @@ tr:last-child td{border-bottom:none;}
           <button class="addbtn" style="height:40px;background:#1F4E79;" onclick="photoSearch()">🔍 Search</button>
         </div>
         <div id="ph-body" class="loading" style="color:#9ca3af;">Loading…</div>
+      </div>
+    </div>
+
+    <!-- ARCHIVE TAB -->
+    <div id="pane-archive" style="display:none">
+      <div class="card">
+        <h3>Archive search</h3>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:12px;line-height:1.5;">
+          Search accounts from <b>closed (archived) months</b>. Each result shows its
+          details and the full remark-change timeline. Fills up as months close.
+        </div>
+        <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px;">
+          <div class="lfield" style="margin:0;min-width:160px;">
+            <label>Month</label>
+            <select id="arc-month" class="dsh-sel" style="width:100%;" onchange="archiveSearch()">
+              <option value="">All archived months</option></select>
+          </div>
+          <div class="lfield" style="margin:0;min-width:220px;flex:1;">
+            <label>Search</label>
+            <input type="text" id="arc-q" placeholder="ACNO, meter or address…" oninput="archiveSearchDebounced()"
+              onkeydown="if(event.key==='Enter')archiveSearch()"
+              style="width:100%;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:14px;font-family:inherit;outline:none;color:#111;background:#fff;">
+          </div>
+          <button class="addbtn" style="height:40px;background:#1F4E79;" onclick="archiveSearch()">🔍 Search</button>
+        </div>
+        <div id="arc-body" class="loading" style="color:#9ca3af;">Loading…</div>
       </div>
     </div>
 
@@ -911,6 +947,9 @@ function switchTab(t) {
   document.getElementById('pane-new').style.display = t==='new' ? 'block' : 'none';
   document.getElementById('pane-nometer').style.display = t==='nometer' ? 'block' : 'none';
   { const e=document.getElementById('pane-photos'); if(e) e.style.display = t==='photos' ? 'block' : 'none'; }
+  { const e=document.getElementById('tab-archive'); if(e) e.classList.toggle('active', t==='archive'); }
+  { const e=document.getElementById('pane-archive'); if(e) e.style.display = t==='archive' ? 'block' : 'none'; }
+  if (t==='archive') archiveSearch();
   document.getElementById('pane-report').style.display = t==='report' ? 'block' : 'none';
   document.getElementById('pane-dash').style.display = t==='dash' ? 'block' : 'none';
   if (t !== 'entered') { entStopPolling(); entBlinkRefresh(false); }
@@ -2375,6 +2414,14 @@ const fQ = (document.getElementById('new-search') || {}).value || '';
   const rows = shown.map(({ r, ri }) => {
     const cells = NEW_COLS.map(c => {
       const v = r.cells[c.i - 1];
+      // ACNO opens the remark timeline panel (and still copies on click of the number).
+      if (c.i === 2) {
+        return '<td style="padding:5px 4px;white-space:nowrap;">' +
+          '<button type="button" onclick="showRemarkTimeline(\'' + esc(String(v ?? '')) + '\')" ' +
+          'title="Show remark history" style="background:none;border:none;padding:0;margin:0;cursor:pointer;' +
+          'font-family:inherit;font-size:12px;font-weight:700;color:#1F4E79;text-decoration:underline dotted;">' +
+          esc(v ?? '') + '</button></td>';
+      }
       // DC state (col J) is a flag, not a value to copy — show it as a badge.
       if (c.i === 10) {
         const dc = String(v ?? '').trim();
@@ -2913,6 +2960,13 @@ async function loadReport() {
   try {
     const d = await api({ action: 'area_report', area: area, month: month });
     if (!d.success) { body.style.color = '#b91c1c'; body.textContent = d.message || 'Could not build the report.'; return; }
+    // Remark change history for the same area/month, per account.
+    let rh = {};
+    try {
+      const hr = await api({ action: 'report_remarks', area: area, month: month });
+      if (hr && hr.success) rh = hr.accounts || {};
+    } catch(_) {}
+    d.remarkHistory = rh;
     renderReport(d);
   } catch(e) {
     if (e.message !== 'auth') { body.style.color = '#b91c1c'; body.textContent = 'Could not connect.'; }
@@ -3011,6 +3065,26 @@ function renderReport(d) {
     '</details>';
   };
 
+  // Remark changes: every edited remark for this area/month, grouped by account.
+  const rh = d.remarkHistory || {};
+  const rhAcnos = Object.keys(rh);
+  const remarksSection = rhAcnos.length
+    ? '<div class="dsh-h">📝 Remark changes</div>' +
+      '<div style="border:1px solid #e5e7eb;border-radius:9px;overflow:hidden;">' +
+      rhAcnos.map(acno =>
+        '<div style="border-bottom:1px solid #f1f3f5;padding:10px 13px;">' +
+          '<div style="font-family:\'JetBrains Mono\',monospace;font-weight:700;color:#1F4E79;margin-bottom:6px;">ACNO ' + esc(acno) + '</div>' +
+          rh[acno].map(e =>
+            '<div style="font-size:12px;padding:2px 0 2px 12px;border-left:2px solid #c4b5fd;margin-bottom:4px;">' +
+              '<span style="color:#6b7280;">' + esc(fmtStamp(e.at)) + ' · <b>' + esc(e.by || '—') + '</b></span> — ' +
+              (e.old ? '<span style="color:#9ca3af;text-decoration:line-through;">' + esc(e.old) + '</span> → ' : '') +
+              '<span style="color:#111;font-weight:600;">' + (e.new ? esc(e.new) : '<span style="color:#b91c1c;">(cleared)</span>') + '</span>' +
+            '</div>'
+          ).join('') +
+        '</div>'
+      ).join('') + '</div>'
+    : '';
+
   const details =
     '<div class="dsh-h">Account details</div>' +
     detail('🔴 DC meters', d.dcList, '#dc2626', false) +
@@ -3028,6 +3102,7 @@ function renderReport(d) {
       '<div class="dsh-h">Daily breakdown</div>' + table +
       '<div class="hint" style="margin-top:8px;">Given = accounts issued that day (R_DATE). Taken = readings actually recorded on that day (NEW DATE).</div>' +
       details +
+      remarksSection +
     '</div>';
 }
 
@@ -3157,6 +3232,117 @@ async function exportAccounts(scope){
   const areaBit = (scope !== 'all' && area && area !== 'all') ? '_Area' + area : '';
   XLSX.writeFile(wb, 'Unbilled_' + scopeName + areaBit + monthBit + '_' + stamp + '.xlsx');
   flash(label + ' exported — ' + d.count + ' row(s) ✓', true);
+}
+
+/* ── Remark history timeline (Unbilled New side panel) ── */
+async function showRemarkTimeline(acno){
+  const panel = document.getElementById('rmk-timeline');
+  const body = document.getElementById('rmk-timeline-body');
+  if (!panel || !body) return;
+  panel.style.display = 'block';
+  body.innerHTML = '<div style="color:#9ca3af;">Loading history for ' + esc(acno) + '…</div>';
+  try {
+    const d = await api({ action: 'remark_history', acno: acno });
+    if (!d || !d.success) { body.innerHTML = '<div style="color:#b91c1c;">' + esc((d && d.message) || 'Could not load.') + '</div>'; return; }
+    body.innerHTML = renderTimeline(acno, d.history || []);
+  } catch(e) {
+    if (e.message !== 'auth') body.innerHTML = '<div style="color:#b91c1c;">Could not connect.</div>';
+  }
+}
+function closeRemarkTimeline(){
+  const p = document.getElementById('rmk-timeline');
+  if (p) p.style.display = 'none';
+}
+function renderTimeline(acno, history){
+  let h = '<div style="font-weight:700;color:#1F4E79;margin-bottom:8px;font-family:\'JetBrains Mono\',monospace;">ACNO ' + esc(acno) + '</div>';
+  if (!history.length) return h + '<div style="color:#9ca3af;">No remark changes recorded yet. Changes are tracked from now on.</div>';
+  h += history.map(e =>
+    '<div style="border-left:2px solid #c4b5fd;padding:0 0 12px 11px;margin-left:3px;position:relative;">' +
+      '<div style="position:absolute;left:-5px;top:2px;width:8px;height:8px;border-radius:50%;background:#7c3aed;"></div>' +
+      '<div style="font-size:11px;color:#6b7280;margin-bottom:2px;">' + esc(fmtStamp(e.at)) + ' · <b>' + esc(e.by || '—') + '</b></div>' +
+      (e.old
+        ? '<div style="color:#9ca3af;text-decoration:line-through;font-size:11.5px;">' + esc(e.old) + '</div>'
+        : '<div style="color:#9ca3af;font-style:italic;font-size:11.5px;">(was empty)</div>') +
+      '<div style="color:#111;font-weight:600;">' + (e.new ? esc(e.new) : '<span style="color:#b91c1c;">(cleared)</span>') + '</div>' +
+    '</div>'
+  ).join('');
+  return h;
+}
+// Format a timestamp as "18-07-2026 14:32" in the browser's local time.
+function fmtStamp(iso){
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  const p = n => String(n).padStart(2,'0');
+  return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+/* ── Archive search (closed months + remark timeline) ── */
+let arcMonthsLoaded = false, arcTimer = null;
+function archiveSearchDebounced(){ clearTimeout(arcTimer); arcTimer = setTimeout(archiveSearch, 300); }
+
+async function archiveSearch(){
+  const body = document.getElementById('arc-body');
+  if (!body) return;
+  const month = (document.getElementById('arc-month') || {}).value || '';
+  const qterm = (document.getElementById('arc-q') || {}).value || '';
+  body.className = 'loading'; body.style.color = '#9ca3af'; body.textContent = 'Searching…';
+  try {
+    const d = await api({ action: 'archive_search', month: month, q: qterm });
+    if (!d || !d.success) { body.style.color = '#b91c1c'; body.textContent = (d && d.message) || 'Could not search.'; return; }
+    if (!arcMonthsLoaded && d.months) {
+      const sel = document.getElementById('arc-month');
+      sel.innerHTML = '<option value="">All archived months</option>' +
+        d.months.map(m => '<option value="' + esc(m) + '">' + esc(monthName(m)) + '</option>').join('');
+      sel.value = month;
+      arcMonthsLoaded = true;
+    }
+    renderArchive(d.rows || []);
+  } catch(e) {
+    if (e.message !== 'auth') { body.style.color = '#b91c1c'; body.textContent = 'Could not connect.'; }
+  }
+}
+
+function renderArchive(rows){
+  const body = document.getElementById('arc-body');
+  body.className = ''; body.style.color = '';
+  if (!rows.length) {
+    body.innerHTML = '<div class="loading" style="color:#9ca3af;">No archived accounts match. (The archive fills as months close.)</div>';
+    return;
+  }
+  body.innerHTML =
+    '<div class="hint" style="margin-bottom:10px;">' + rows.length + ' account(s)' +
+      (rows.length === 200 ? ' — first 200 shown, narrow your search' : '') + '</div>' +
+    rows.map(r => {
+      const dc = r.dcState ? '<span class="role-b" style="background:#fee2e2;color:#b91c1c;">⚡ DC</span>' : '';
+      const nm = r.noMeter ? '<span class="role-b" style="background:#e5e7eb;color:#374151;">NO METER</span>' : '';
+      const tg = r.tag ? '<span class="role-b" style="background:#ede9fe;color:#6d28d9;">' + esc(r.tag) + '</span>' : '';
+      const hist = (r.history && r.history.length)
+        ? r.history.map(e =>
+            '<div style="font-size:12px;padding:2px 0 2px 12px;border-left:2px solid #c4b5fd;margin-bottom:4px;">' +
+              '<span style="color:#6b7280;">' + esc(fmtStamp(e.at)) + ' · <b>' + esc(e.by || '—') + '</b></span> — ' +
+              (e.old ? '<span style="color:#9ca3af;text-decoration:line-through;">' + esc(e.old) + '</span> → ' : '') +
+              '<span style="color:#111;font-weight:600;">' + (e.new ? esc(e.new) : '<span style="color:#b91c1c;">(cleared)</span>') + '</span>' +
+            '</div>'
+          ).join('')
+        : '<div class="hint" style="padding-left:12px;">No remark changes were recorded for this account.</div>';
+      return '<div style="border:1px solid #e5e7eb;border-radius:11px;padding:14px 16px;margin-bottom:12px;background:#fafafa;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;">' +
+          '<div style="font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:15px;color:#1F4E79;">ACNO ' + esc(r.acno) +
+            ' <span class="area-b">Area ' + esc(r.area) + '</span> ' + dc + ' ' + nm + ' ' + tg + '</div>' +
+          '<div style="font-size:12px;color:#6b7280;">' + esc(monthName(r.month)) + ' · R_DATE ' + esc(r.rdate || '—') + '</div>' +
+        '</div>' +
+        '<div style="font-size:13px;color:#374151;margin:4px 0 10px;">' + esc(r.address || '—') +
+          '  ·  Meter ' + esc(r.meter || '—') + '</div>' +
+        '<div style="display:flex;gap:22px;flex-wrap:wrap;font-size:12.5px;margin-bottom:12px;font-family:\'JetBrains Mono\',monospace;">' +
+          '<span>Prev: <b>' + esc(String(r.prevReading || '—')) + '</b> (' + esc(r.prevDate || '—') + ')</span>' +
+          '<span>New: <b>' + esc(String(r.newReading || '—')) + '</b> (' + esc(r.newDate || '—') + ')</span>' +
+          '<span>Remarks: <b>' + esc(r.remarks || '—') + '</b></span>' +
+        '</div>' +
+        '<div style="font-weight:700;color:#6d28d9;font-size:12.5px;margin-bottom:6px;">📝 Remark history</div>' +
+        hist +
+      '</div>';
+    }).join('');
 }
 
 /* ── Photo search ──────────────────────────────────────────────
