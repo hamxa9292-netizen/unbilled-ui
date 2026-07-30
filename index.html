@@ -308,6 +308,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
       <div class="errmsg" id="serr" style="margin-top:6px;"></div>
 
+      <!-- Remark history (read-only) -->
+      <div id="rmk-hist" style="display:none;margin-top:12px;background:#1a2330;border:1px solid #2a3646;border-radius:10px;padding:12px 13px;">
+        <div style="color:#c4b5fd;font-weight:700;font-size:12px;margin-bottom:9px;">📝 Remark history</div>
+        <div id="rmk-hist-body" style="font-size:12px;"></div>
+      </div>
+
       <!-- Spacer so content doesn't hide behind fixed buttons -->
       <div style="height:72px;"></div>
     </div>
@@ -845,6 +851,39 @@ function normDateInput_(v) {
   return '';
 }
 
+// Read-only remark history for the account detail screen. Field staff can see
+// the timeline but not edit it — supervisors manage remarks.
+async function loadRemarkHistory(acno){
+  const wrap = document.getElementById('rmk-hist');
+  const body = document.getElementById('rmk-hist-body');
+  if (!wrap || !body) return;
+  wrap.style.display = 'none';                 // hide until we know there's history
+  body.innerHTML = '';
+  try {
+    const res = await fetch(authUrl('?action=remark_history&acno=' + encodeURIComponent(acno)));
+    const d = await res.json();
+    if (!d || !d.success || !(d.history && d.history.length)) return;
+    body.innerHTML = d.history.map(e =>
+      '<div style="border-left:2px solid #7c3aed;padding:0 0 11px 11px;margin-left:2px;position:relative;">' +
+        '<div style="position:absolute;left:-5px;top:2px;width:8px;height:8px;border-radius:50%;background:#8b5cf6;"></div>' +
+        '<div style="font-size:10.5px;color:#94a3b8;margin-bottom:2px;">' + escHtml(rmkStamp(e.at)) + ' · <b style="color:#cbd5e1;">' + escHtml(e.by || '—') + '</b></div>' +
+        (e.old
+          ? '<div style="color:#94a3b8;text-decoration:line-through;font-size:11.5px;opacity:.8;">' + escHtml(e.old) + '</div>'
+          : '<div style="color:#94a3b8;font-style:italic;font-size:11.5px;">(was empty)</div>') +
+        '<div style="color:#f1f5f9;font-weight:600;font-size:12.5px;">' + (e.new ? escHtml(e.new) : '<span style="color:#f87171;">(cleared)</span>') + '</div>' +
+      '</div>'
+    ).join('');
+    wrap.style.display = 'block';
+  } catch(e) { /* offline or no access — just don't show the panel */ }
+}
+function rmkStamp(iso){
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  const p = n => String(n).padStart(2,'0');
+  return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
 function fillDetail(d, keepKeyboard) {
   document.getElementById('d-acno').textContent=d.acno;
   document.getElementById('d-area').textContent='Area '+(d.area||'—');
@@ -857,7 +896,7 @@ function fillDetail(d, keepKeyboard) {
   if (dcEl) {
     const dc = String(d.dcState || '').trim();
     dcEl.style.display = dc ? 'inline-block' : 'none';
-    dcEl.title = dc;                      // raw DC_STATE value on hover/long-press
+    dcEl.title = dc;
   }
   const b=document.getElementById('d-status');
   b.textContent=d.locked?'\u{1F512} Locked':(d.status==='done'?'Done':'Pending');
@@ -870,6 +909,7 @@ function fillDetail(d, keepKeyboard) {
     ? normDateInput_(d.newDate)
     : new Date().toISOString().split('T')[0];
   document.getElementById('f-remarks').value=d.remarks||'';
+  loadRemarkHistory(d.acno);
   showDateLbl();
   document.getElementById('serr').style.display='none';
   const sb = document.getElementById('sbar');
