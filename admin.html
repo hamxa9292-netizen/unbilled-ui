@@ -566,16 +566,7 @@ tr:last-child td{border-bottom:none;}
           </span>
         </div>
         <div id="new-note" style="display:none;font-size:12px;color:#075985;background:#e0f2fe;border-radius:8px;padding:8px 12px;margin-bottom:10px;"></div>
-        <div style="display:flex;gap:16px;align-items:flex-start;">
-          <div id="new-body" class="loading" style="color:#9ca3af;flex:1;min-width:0;">Loading…</div>
-          <div id="rmk-timeline" style="display:none;width:290px;flex:none;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:14px 15px;position:sticky;top:14px;max-height:calc(100vh - 40px);overflow-y:auto;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-              <div style="font-weight:700;color:var(--accent,#8b5cf6);font-size:13px;">📝 Remark history</div>
-              <button onclick="closeRemarkTimeline()" style="background:none;border:none;font-size:18px;color:var(--text-3);cursor:pointer;line-height:1;">×</button>
-            </div>
-            <div id="rmk-timeline-body" style="font-size:12px;color:var(--text);"></div>
-          </div>
-        </div>
+        <div id="new-body" class="loading" style="color:#9ca3af;">Loading…</div>
       </div>
     </div>
 
@@ -2444,7 +2435,13 @@ const fQ = (document.getElementById('new-search') || {}).value || '';
       '<input type="number" class="rd-input" data-ri="' + ri + '" placeholder="reading…" ' +
       'oninput="onReadingEdit()" ' +
       'style="width:96px;padding:5px 7px;border:1.5px solid #0f766e;border-radius:6px;font-size:12px;font-family:inherit;outline:none;"></td>';
-    return '<tr data-ri="' + ri + '"' + (hasRemark ? ' style="background:#f5f3ff;"' : '') + '>' + cb + cells + rd + rmk + '</tr>';
+    const colspan = (readOnlyNew ? 0 : 1) + NEW_COLS.length + (readOnlyNew ? 0 : 1) + 1;
+    const mainTr = '<tr id="nrow-' + ri + '" data-ri="' + ri + '"' + (hasRemark ? ' style="background:#f5f3ff;"' : '') + '>' + cb + cells + rd + rmk + '</tr>';
+    // Hidden detail row holds the remark timeline + add box; shown on tick.
+    const detailTr = '<tr id="ndetail-' + ri + '" data-detail="' + ri + '" style="display:none;">' +
+      '<td colspan="' + colspan + '" style="padding:0;background:var(--surface-2);border-bottom:2px solid var(--border);">' +
+      '<div id="ndetail-body-' + ri + '" style="padding:14px 18px;"></div></td></tr>';
+    return mainTr + detailTr;
   }).join('');
   body.innerHTML =
     '<div style="border:1px solid #e5e7eb;border-radius:9px;overflow:hidden;">' +
@@ -3134,6 +3131,8 @@ function showRdDateLbl() {
 /* ── Changeover tagging (Unbilled New) ── */
 function toggleAllNew(cb) {
   document.querySelectorAll('.new-cb').forEach(x => { x.checked = cb.checked; });
+  // Select-all is for bulk tagging, not viewing — collapse any open timelines.
+  document.querySelectorAll('[data-detail]').forEach(d => { d.style.display = 'none'; });
   updateChgBtn();
 }
 function updateChgBtn() {
@@ -3227,49 +3226,94 @@ async function exportAccounts(scope){
   flash(label + ' exported — ' + d.count + ' row(s) ✓', true);
 }
 
-/* ── Remark history timeline (Unbilled New side panel) ── */
-// Opens when a row's checkbox is TICKED. Uses theme-aware colours so the text
-// is readable on both light and dark themes (the old version hardcoded near-
-// black text that vanished on the dark panel).
+/* ── Remark history timeline (inline row expand) ── */
+// Ticking a row expands it inline to show that account's remark timeline and an
+// "add remark" box. Unticking collapses it. Details of the account row itself
+// are never hidden — the timeline appears in a panel BELOW the row.
 async function onNewRowTick(cb){
-  if (!cb || !cb.checked) return;                 // only open on tick, not untick
+  const ri = cb.getAttribute('data-ri');
+  const detail = document.getElementById('ndetail-' + ri);
+  if (!detail) return;
+  if (!cb.checked) { detail.style.display = 'none'; return; }
+  detail.style.display = '';
   const acno = cb.getAttribute('data-acno');
-  if (acno) showRemarkTimeline(acno);
+  loadRowTimeline(ri, acno);
 }
 
-async function showRemarkTimeline(acno){
-  const panel = document.getElementById('rmk-timeline');
-  const body = document.getElementById('rmk-timeline-body');
-  if (!panel || !body) return;
-  panel.style.display = 'block';
-  panel.setAttribute('data-acno', acno);
-  body.innerHTML = '<div style="color:var(--text-2,#9ca3af);">Loading history for ' + esc(acno) + '…</div>';
+async function loadRowTimeline(ri, acno){
+  const box = document.getElementById('ndetail-body-' + ri);
+  if (!box) return;
+  box.innerHTML = '<div style="color:var(--text-2);">Loading history for ' + esc(acno) + '…</div>';
+  let history = [];
   try {
     const d = await api({ action: 'remark_history', acno: acno });
-    if (!d || !d.success) { body.innerHTML = '<div style="color:#ef4444;">' + esc((d && d.message) || 'Could not load.') + '</div>'; return; }
-    body.innerHTML = renderTimeline(acno, d.history || []);
+    if (d && d.success) history = d.history || [];
+    else { box.innerHTML = '<div style="color:#ef4444;">' + esc((d && d.message) || 'Could not load.') + '</div>'; return; }
   } catch(e) {
-    if (e.message !== 'auth') body.innerHTML = '<div style="color:#ef4444;">Could not connect.</div>';
+    if (e.message !== 'auth') box.innerHTML = '<div style="color:#ef4444;">Could not connect.</div>';
+    return;
   }
+  box.innerHTML = renderRowTimeline(ri, acno, history);
 }
-function closeRemarkTimeline(){
-  const p = document.getElementById('rmk-timeline');
-  if (p) p.style.display = 'none';
+
+function renderRowTimeline(ri, acno, history){
+  // current remark value comes from the row's remarks input (or its cell)
+  const rowRi = newRows[parseInt(ri)] ? String(newRows[parseInt(ri)].remarks || '') : '';
+  const tl = history.length
+    ? history.map(e =>
+        '<div style="border-left:2px solid #a78bfa;padding:0 0 13px 12px;margin-left:3px;position:relative;">' +
+          '<div style="position:absolute;left:-5px;top:3px;width:9px;height:9px;border-radius:50%;background:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.18);"></div>' +
+          '<div style="font-size:11px;color:var(--text-2);margin-bottom:3px;">' + esc(fmtStamp(e.at)) + ' · <b style="color:var(--text);">' + esc(e.by || '—') + '</b></div>' +
+          (e.old
+            ? '<div style="color:var(--text-2);text-decoration:line-through;font-size:12px;opacity:.75;">' + esc(e.old) + '</div>'
+            : '<div style="color:var(--text-2);font-style:italic;font-size:12px;">(was empty)</div>') +
+          '<div style="color:var(--text);font-weight:600;font-size:13px;margin-top:1px;">' + (e.new ? esc(e.new) : '<span style="color:#f87171;">(cleared)</span>') + '</div>' +
+        '</div>'
+      ).join('')
+    : '<div style="color:var(--text-2);font-size:12.5px;line-height:1.5;">No remark changes recorded for this account yet.</div>';
+
+  return '<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">' +
+    // timeline column
+    '<div style="flex:1;min-width:240px;">' +
+      '<div style="font-weight:700;color:#8b5cf6;font-size:12.5px;margin-bottom:10px;">📝 Remark history · <span style="font-family:\'JetBrains Mono\',monospace;color:var(--text);">ACNO ' + esc(acno) + '</span></div>' +
+      tl +
+    '</div>' +
+    // add box column
+    '<div style="flex:none;width:300px;max-width:100%;">' +
+      '<div style="font-weight:700;color:var(--text);font-size:12.5px;margin-bottom:8px;">Add / update remark</div>' +
+      '<textarea id="nadd-' + ri + '" rows="3" placeholder="Type the new remark…" ' +
+        'style="width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;outline:none;resize:vertical;background:var(--surface);color:var(--text);">' + esc(rowRi) + '</textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:8px;">' +
+        '<button class="addbtn" style="background:#7c3aed;flex:1;" onclick="addRowRemark(' + ri + ',\'' + esc(acno) + '\')">＋ Save to timeline</button>' +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--text-2);margin-top:6px;line-height:1.4;">Saving records this change in the history and updates the account\'s remark.</div>' +
+    '</div>' +
+  '</div>';
 }
-function renderTimeline(acno, history){
-  let h = '<div style="font-weight:700;color:var(--accent,#7c3aed);margin-bottom:10px;font-family:\'JetBrains Mono\',monospace;">ACNO ' + esc(acno) + '</div>';
-  if (!history.length) return h + '<div style="color:var(--text-2,#9ca3af);line-height:1.5;">No remark changes recorded for this account yet. Changes are tracked from now on.</div>';
-  h += history.map(e =>
-    '<div style="border-left:2px solid #a78bfa;padding:0 0 14px 12px;margin-left:3px;position:relative;">' +
-      '<div style="position:absolute;left:-5px;top:3px;width:9px;height:9px;border-radius:50%;background:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.18);"></div>' +
-      '<div style="font-size:11px;color:var(--text-2,#8b98a8);margin-bottom:3px;">' + esc(fmtStamp(e.at)) + ' · <b style="color:var(--text,#e5e7eb);">' + esc(e.by || '—') + '</b></div>' +
-      (e.old
-        ? '<div style="color:var(--text-2,#9ca3af);text-decoration:line-through;font-size:12px;opacity:.75;">' + esc(e.old) + '</div>'
-        : '<div style="color:var(--text-2,#9ca3af);font-style:italic;font-size:12px;">(was empty)</div>') +
-      '<div style="color:var(--text,#f3f4f6);font-weight:600;font-size:13px;margin-top:1px;">' + (e.new ? esc(e.new) : '<span style="color:#f87171;">(cleared)</span>') + '</div>' +
-    '</div>'
-  ).join('');
-  return h;
+
+// Save the add-box value as the account's remark — logs a timeline entry.
+async function addRowRemark(ri, acno){
+  const ta = document.getElementById('nadd-' + ri);
+  if (!ta) return;
+  const text = ta.value;
+  const r = newRows[parseInt(ri)];
+  if (!r) return;
+  if (String(text) === String(r.remarks || '')) { flash('No change to save.', false); return; }
+  try {
+    const d = await api({ action: 'save_remarks', items: [{ row: r.row, acno: acno, remarks: text }] });
+    if (d && d.success && d.saved) {
+      r.remarks = text;                              // keep local copy in sync
+      // update the row's remarks input if present
+      const inp = document.querySelector('.rmk-input[data-ri="' + ri + '"]');
+      if (inp) inp.value = text;
+      flash('Remark saved to timeline ✓', true);
+      loadRowTimeline(ri, acno);                     // refresh the timeline
+    } else {
+      flash((d && d.message) || 'Could not save.', false);
+    }
+  } catch(e) {
+    if (e.message !== 'auth') flash('Could not connect.', false);
+  }
 }
 
 // Format a timestamp as "18-07-2026 14:32" in the browser's local time.
