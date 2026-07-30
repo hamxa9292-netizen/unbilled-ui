@@ -436,6 +436,7 @@ tr:last-child td{border-bottom:none;}
             <button class="addbtn" id="ent-edit-btn" style="background:#2563eb;" onclick="toggleEntEdit()">✏️ Edit reading</button>
             <button class="addbtn" id="ent-save-btn" style="background:#0f766e;" onclick="saveEnteredReadings()" disabled>💾 Save</button>
             <button class="addbtn" id="move-unbilled-btn" style="background:#64748b;" onclick="moveToUnbilled()" disabled>↩️ Move to Unbilled</button>
+            <button class="addbtn" id="unlock-btn" style="background:#7c3aed;display:none;" onclick="unlockSelected()" disabled>🔓 Unlock selected</button>
             <button class="addbtn" id="lock-btn" style="background:#b45309;" onclick="lockSelected()" disabled>🔒 Mark selected done → billing</button>
           </span>
         </h3>
@@ -1895,6 +1896,17 @@ function updateLockBtn() {
   if (lb) lb.disabled = !actionable;
   const mv = document.getElementById('move-unbilled-btn');
   if (mv) mv.disabled = !actionable;
+  // Admin unlock: mirror logic — enabled when at least one LOCKED row is ticked.
+  const ub = document.getElementById('unlock-btn');
+  if (ub) {
+    const isAdmin = session.user.role === 'admin';
+    ub.style.display = isAdmin ? '' : 'none';
+    if (isAdmin) {
+      const anyLocked = Array.from(document.querySelectorAll('.ent-cb'))
+        .some(x => x.checked && x.getAttribute('data-locked') === '1');
+      ub.disabled = !anyLocked;
+    }
+  }
 }
 // Highlight a row yellow while its checkbox is ticked (locked rows stay green)
 function onEnteredTick(cb) {
@@ -1981,6 +1993,41 @@ async function lockSelected() {
     if (e.message !== 'auth') flash('Could not connect.', false);
   }
   btn.innerHTML = '🔒 Mark selected done → billing';
+}
+
+// ADMIN-ONLY: reopen ticked LOCKED accounts (reverse of lockSelected). Collects
+// only the locked rows in the selection — unlocked ones are ignored here.
+async function unlockSelected() {
+  if (session.user.role !== 'admin') { flash('Only an admin can unlock accounts.', false); return; }
+  const items = [];
+  document.querySelectorAll('#entered-body tbody tr').forEach(tr => {
+    const cb = tr.querySelector('.ent-cb');
+    if (cb && cb.checked) {
+      const r = enteredRows[parseInt(tr.getAttribute('data-ri'))];
+      if (!r || !r.locked) return;                 // only locked rows are unlockable
+      items.push({ row: r.row, acno: r.acno });
+    }
+  });
+  if (!items.length) { flash('Tick the locked account(s) you want to unlock.', false); return; }
+  if (!confirm('Unlock ' + items.length + ' account(s)?\n\n' +
+    'They were locked and sent to billing. Unlocking reopens them for editing and returns them to the working views. Do this only on a supervisor\'s request.')) return;
+
+  const btn = document.getElementById('unlock-btn');
+  btn.textContent = 'Unlocking…'; btn.disabled = true;
+  try {
+    const d = await api({ action: 'unlock_rows', items: items });
+    if (d && d.success) {
+      flash(d.unlocked + ' account(s) unlocked ✓' + (d.unarchived ? ', ' + d.unarchived + ' returned from archive' : ''), true);
+      preloadCache = null;
+      if (session.user.role === 'supervisor') startPreload();
+      loadEntered();
+    } else {
+      flash((d && d.message) || 'Could not unlock.', false);
+    }
+  } catch(e) {
+    if (e.message !== 'auth') flash('Could not connect.', false);
+  }
+  btn.innerHTML = '🔓 Unlock selected';
 }
 
 // Bundle the locked accounts' photos into a ZIP and download it.
