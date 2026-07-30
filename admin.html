@@ -568,12 +568,12 @@ tr:last-child td{border-bottom:none;}
         <div id="new-note" style="display:none;font-size:12px;color:#075985;background:#e0f2fe;border-radius:8px;padding:8px 12px;margin-bottom:10px;"></div>
         <div style="display:flex;gap:16px;align-items:flex-start;">
           <div id="new-body" class="loading" style="color:#9ca3af;flex:1;min-width:0;">Loading…</div>
-          <div id="rmk-timeline" style="display:none;width:290px;flex:none;background:#faf9ff;border:1px solid #e5e0f5;border-radius:11px;padding:14px 15px;position:sticky;top:14px;">
+          <div id="rmk-timeline" style="display:none;width:290px;flex:none;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:14px 15px;position:sticky;top:14px;max-height:calc(100vh - 40px);overflow-y:auto;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-              <div style="font-weight:700;color:#6d28d9;font-size:13px;">📝 Remark history</div>
-              <button onclick="closeRemarkTimeline()" style="background:none;border:none;font-size:16px;color:#9ca3af;cursor:pointer;line-height:1;">×</button>
+              <div style="font-weight:700;color:var(--accent,#8b5cf6);font-size:13px;">📝 Remark history</div>
+              <button onclick="closeRemarkTimeline()" style="background:none;border:none;font-size:18px;color:var(--text-3);cursor:pointer;line-height:1;">×</button>
             </div>
-            <div id="rmk-timeline-body" style="font-size:12px;color:#374151;"></div>
+            <div id="rmk-timeline-body" style="font-size:12px;color:var(--text);"></div>
           </div>
         </div>
       </div>
@@ -2414,14 +2414,6 @@ const fQ = (document.getElementById('new-search') || {}).value || '';
   const rows = shown.map(({ r, ri }) => {
     const cells = NEW_COLS.map(c => {
       const v = r.cells[c.i - 1];
-      // ACNO opens the remark timeline panel (and still copies on click of the number).
-      if (c.i === 2) {
-        return '<td style="padding:5px 4px;white-space:nowrap;">' +
-          '<button type="button" onclick="showRemarkTimeline(\'' + esc(String(v ?? '')) + '\')" ' +
-          'title="Show remark history" style="background:none;border:none;padding:0;margin:0;cursor:pointer;' +
-          'font-family:inherit;font-size:12px;font-weight:700;color:#1F4E79;text-decoration:underline dotted;">' +
-          esc(v ?? '') + '</button></td>';
-      }
       // DC state (col J) is a flag, not a value to copy — show it as a badge.
       if (c.i === 10) {
         const dc = String(v ?? '').trim();
@@ -2443,7 +2435,8 @@ const fQ = (document.getElementById('new-search') || {}).value || '';
     const hasRemark = String(r.remarks || '').trim() !== '';
     const cb = readOnlyNew ? '' :
       '<td style="text-align:center;padding:5px 3px;">' +
-      '<input type="checkbox" class="new-cb" data-ri="' + ri + '" onchange="updateChgBtn()"></td>';
+      '<input type="checkbox" class="new-cb" data-ri="' + ri + '" data-acno="' + esc(r.acno) + '" ' +
+      'onchange="updateChgBtn(); onNewRowTick(this);"></td>';
     // Type the reading here and the account becomes "taken" — it moves straight
     // into Unbilled Taken on the next refresh.
     const rd = readOnlyNew ? '' :
@@ -3235,18 +3228,28 @@ async function exportAccounts(scope){
 }
 
 /* ── Remark history timeline (Unbilled New side panel) ── */
+// Opens when a row's checkbox is TICKED. Uses theme-aware colours so the text
+// is readable on both light and dark themes (the old version hardcoded near-
+// black text that vanished on the dark panel).
+async function onNewRowTick(cb){
+  if (!cb || !cb.checked) return;                 // only open on tick, not untick
+  const acno = cb.getAttribute('data-acno');
+  if (acno) showRemarkTimeline(acno);
+}
+
 async function showRemarkTimeline(acno){
   const panel = document.getElementById('rmk-timeline');
   const body = document.getElementById('rmk-timeline-body');
   if (!panel || !body) return;
   panel.style.display = 'block';
-  body.innerHTML = '<div style="color:#9ca3af;">Loading history for ' + esc(acno) + '…</div>';
+  panel.setAttribute('data-acno', acno);
+  body.innerHTML = '<div style="color:var(--text-2,#9ca3af);">Loading history for ' + esc(acno) + '…</div>';
   try {
     const d = await api({ action: 'remark_history', acno: acno });
-    if (!d || !d.success) { body.innerHTML = '<div style="color:#b91c1c;">' + esc((d && d.message) || 'Could not load.') + '</div>'; return; }
+    if (!d || !d.success) { body.innerHTML = '<div style="color:#ef4444;">' + esc((d && d.message) || 'Could not load.') + '</div>'; return; }
     body.innerHTML = renderTimeline(acno, d.history || []);
   } catch(e) {
-    if (e.message !== 'auth') body.innerHTML = '<div style="color:#b91c1c;">Could not connect.</div>';
+    if (e.message !== 'auth') body.innerHTML = '<div style="color:#ef4444;">Could not connect.</div>';
   }
 }
 function closeRemarkTimeline(){
@@ -3254,20 +3257,21 @@ function closeRemarkTimeline(){
   if (p) p.style.display = 'none';
 }
 function renderTimeline(acno, history){
-  let h = '<div style="font-weight:700;color:#1F4E79;margin-bottom:8px;font-family:\'JetBrains Mono\',monospace;">ACNO ' + esc(acno) + '</div>';
-  if (!history.length) return h + '<div style="color:#9ca3af;">No remark changes recorded yet. Changes are tracked from now on.</div>';
+  let h = '<div style="font-weight:700;color:var(--accent,#7c3aed);margin-bottom:10px;font-family:\'JetBrains Mono\',monospace;">ACNO ' + esc(acno) + '</div>';
+  if (!history.length) return h + '<div style="color:var(--text-2,#9ca3af);line-height:1.5;">No remark changes recorded for this account yet. Changes are tracked from now on.</div>';
   h += history.map(e =>
-    '<div style="border-left:2px solid #c4b5fd;padding:0 0 12px 11px;margin-left:3px;position:relative;">' +
-      '<div style="position:absolute;left:-5px;top:2px;width:8px;height:8px;border-radius:50%;background:#7c3aed;"></div>' +
-      '<div style="font-size:11px;color:#6b7280;margin-bottom:2px;">' + esc(fmtStamp(e.at)) + ' · <b>' + esc(e.by || '—') + '</b></div>' +
+    '<div style="border-left:2px solid #a78bfa;padding:0 0 14px 12px;margin-left:3px;position:relative;">' +
+      '<div style="position:absolute;left:-5px;top:3px;width:9px;height:9px;border-radius:50%;background:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.18);"></div>' +
+      '<div style="font-size:11px;color:var(--text-2,#8b98a8);margin-bottom:3px;">' + esc(fmtStamp(e.at)) + ' · <b style="color:var(--text,#e5e7eb);">' + esc(e.by || '—') + '</b></div>' +
       (e.old
-        ? '<div style="color:#9ca3af;text-decoration:line-through;font-size:11.5px;">' + esc(e.old) + '</div>'
-        : '<div style="color:#9ca3af;font-style:italic;font-size:11.5px;">(was empty)</div>') +
-      '<div style="color:#111;font-weight:600;">' + (e.new ? esc(e.new) : '<span style="color:#b91c1c;">(cleared)</span>') + '</div>' +
+        ? '<div style="color:var(--text-2,#9ca3af);text-decoration:line-through;font-size:12px;opacity:.75;">' + esc(e.old) + '</div>'
+        : '<div style="color:var(--text-2,#9ca3af);font-style:italic;font-size:12px;">(was empty)</div>') +
+      '<div style="color:var(--text,#f3f4f6);font-weight:600;font-size:13px;margin-top:1px;">' + (e.new ? esc(e.new) : '<span style="color:#f87171;">(cleared)</span>') + '</div>' +
     '</div>'
   ).join('');
   return h;
 }
+
 // Format a timestamp as "18-07-2026 14:32" in the browser's local time.
 function fmtStamp(iso){
   if (!iso) return '';
