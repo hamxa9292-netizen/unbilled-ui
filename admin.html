@@ -372,15 +372,15 @@ tr:last-child td{border-bottom:none;}
     <div class="tabs-wrap">
     <div class="tabs">
       <button class="tab" id="tab-dash" onclick="switchTab('dash')">📈 Dashboard</button>
-      <button class="tab active" id="tab-users" onclick="switchTab('users')">👥 Users</button>
       <button class="tab" id="tab-overview" onclick="switchTab('overview')">📊 Area Progress</button>
       <button class="tab" id="tab-sup" onclick="switchTab('sup')">📤 Upload Unbilled</button>
-      <button class="tab" id="tab-entered" onclick="switchTab('entered')">✅ Unbilled Taken</button>
       <button class="tab" id="tab-new" onclick="switchTab('new')">📋 Unbilled New</button>
+      <button class="tab" id="tab-entered" onclick="switchTab('entered')">✅ Unbilled Taken</button>
       <button class="tab" id="tab-nometer" onclick="switchTab('nometer')">🚫 No-Meter</button>
       <button class="tab" id="tab-photos" onclick="switchTab('photos')">📷 Photos</button>
       <button class="tab" id="tab-archive" onclick="switchTab('archive')">🗄️ Archive</button>
       <button class="tab" id="tab-report" onclick="switchTab('report')">📄 Area Report</button>
+      <button class="tab" id="tab-users" onclick="switchTab('users')">👥 Users</button>
     </div>
     </div>
 
@@ -922,9 +922,11 @@ function switchTab(t) {
   // Keep each role out of the other's panes, whatever tries to open them.
   const isAdminRole = session.user.role === 'admin';
   const ADMIN_ONLY = ['dash', 'users'];
-  const SUP_ONLY   = ['sup', 'entered'];
-  if (!isAdminRole && ADMIN_ONLY.indexOf(t) !== -1) t = 'sup';        // supervisor → Upload
+  const SUP_ONLY   = ['sup'];                                         // only Upload is supervisor-only
+  if (!isAdminRole && ADMIN_ONLY.indexOf(t) !== -1) t = 'overview';   // supervisor → Area Progress
   if (isAdminRole  && SUP_ONLY.indexOf(t)   !== -1) t = 'dash';       // admin → Dashboard
+  // 'entered' (Unbilled Taken) and 'new' (Unbilled New) are shared: admins get
+  // a view-only version, supervisors get the full editing tools.
   document.getElementById('tab-dash').classList.toggle('active', t==='dash');
   document.getElementById('tab-users').classList.toggle('active', t==='users');
   document.getElementById('tab-overview').classList.toggle('active', t==='overview');
