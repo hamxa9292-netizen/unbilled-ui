@@ -3098,14 +3098,14 @@ function renderReport(d) {
   const inlineTL = (acno, colspan) => {
     const es = rh[acno];
     if (!es || !es.length) return '';
-    return '<tr><td colspan="' + colspan + '" style="padding:0 0 8px 0;background:#faf9ff;">' +
+    return '<tr><td colspan="' + colspan + '" style="padding:0 0 8px 0;background:var(--surface-2);">' +
       '<div style="padding:8px 14px 4px;">' +
-        '<div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:5px;">📝 Remark history</div>' +
+        '<div style="font-size:11px;font-weight:700;color:#a78bfa;margin-bottom:5px;">📝 Remark history</div>' +
         es.map(e =>
-          '<div style="font-size:11.5px;padding:1px 0 1px 11px;border-left:2px solid #c4b5fd;margin-bottom:3px;">' +
-            '<span style="color:#6b7280;">' + esc(fmtStamp(e.at)) + ' · <b>' + esc(e.by || '—') + '</b></span> — ' +
-            (e.old ? '<span style="color:#9ca3af;text-decoration:line-through;">' + esc(e.old) + '</span> → ' : '') +
-            '<span style="color:#111;font-weight:600;">' + (e.new ? esc(e.new) : '<span style="color:#b91c1c;">(cleared)</span>') + '</span>' +
+          '<div style="font-size:11.5px;padding:1px 0 1px 11px;border-left:2px solid #7c3aed;margin-bottom:3px;">' +
+            '<span style="color:var(--text-2);">' + esc(fmtStamp(e.at)) + ' · <b style="color:var(--text);">' + esc(e.by || '—') + '</b></span> — ' +
+            (e.old ? '<span style="color:var(--text-2);text-decoration:line-through;opacity:.75;">' + esc(e.old) + '</span> → ' : '') +
+            '<span style="color:var(--text);font-weight:600;">' + (e.new ? esc(e.new) : '<span style="color:#f87171;">(cleared)</span>') + '</span>' +
           '</div>'
         ).join('') +
       '</div></td></tr>';
